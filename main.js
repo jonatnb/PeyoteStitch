@@ -31,6 +31,56 @@ const els = {
 };
 
 let sourceImg = null;
+
+async function loadFileImage(file){
+  // Try createImageBitmap for performance if available
+  try {
+    if ('createImageBitmap' in window && file && file.type && file.type.startsWith('image/')){
+      const bmp = await createImageBitmap(file);
+      // Downscale very large images to max dimension 2400px for iOS memory
+      const maxDim = 2400;
+      let w = bmp.width, h = bmp.height;
+      const scale = Math.min(1, maxDim / Math.max(w, h));
+      const tw = Math.max(1, Math.round(w * scale));
+      const th = Math.max(1, Math.round(h * scale));
+      const can = document.createElement('canvas');
+      can.width = tw; can.height = th;
+      const c2 = can.getContext('2d', { willReadFrequently:true });
+      c2.imageSmoothingEnabled = true;
+      c2.drawImage(bmp, 0,0, tw,th);
+      const dataURL = can.toDataURL('image/jpeg', 0.9);
+      const img = await loadImage(dataURL);
+      return { img, dataURL };
+    }
+  } catch(e){ /* continue to FileReader fallback */ }
+
+  // Fallback: FileReader → DataURL
+  const dataURL = await new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('FileReader failed'));
+    reader.readAsDataURL(file);
+  });
+  // Optional downscale if huge
+  const temp = await loadImage(dataURL);
+  const maxDim = 2400;
+  let w = temp.width, h = temp.height;
+  if (Math.max(w,h) > maxDim){
+    const scale = maxDim / Math.max(w,h);
+    const tw = Math.max(1, Math.round(w * scale));
+    const th = Math.max(1, Math.round(h * scale));
+    const can = document.createElement('canvas');
+    can.width = tw; can.height = th;
+    const c2 = can.getContext('2d', { willReadFrequently:true });
+    c2.imageSmoothingEnabled = true;
+    c2.drawImage(temp, 0,0, tw,th);
+    const downURL = can.toDataURL('image/jpeg', 0.9);
+    const img = await loadImage(downURL);
+    return { img, dataURL: downURL };
+  }
+  return { img: temp, dataURL };
+}
+
 let lastGrid = null;
 let delicaFull = [];
 const labCache = new Map();
@@ -53,22 +103,19 @@ fetch("palettes/delica_full.json").then(r=>r.json()).then(js=>{ delicaFull = js;
 els.file.addEventListener("change", async (e) => {
   const f = e.target.files[0];
   if (!f) return;
-  const reader = new FileReader();
-  reader.onload = async (ev) => {
-    const dataURL = ev.target.result;
-    try {
-      sourceImg = await loadImage(dataURL);
-      if (els.origPreview){ els.origPreview.src = dataURL; }
-      if (els.fileInfo){ els.fileInfo.textContent = `${sourceImg.width}×${sourceImg.height} px • AR ${(sourceImg.width/sourceImg.height).toFixed(3)}`; }
-      loadIntoCropper(sourceImg);
-      updateCropThumb();
-      updateFinalSize();
-    } catch (e){
-      alert('Could not load image. Try a JPEG/PNG under ~8MB.');
-      console.error(e);
-    }
-  };
-  reader.readAsDataURL(f);
+  try {
+    const { img, dataURL } = await loadFileImage(f);
+    sourceImg = img;
+    if (els.origPreview) els.origPreview.src = dataURL;
+    if (els.fileInfo) els.fileInfo.textContent = `${sourceImg.width}×${sourceImg.height} px • AR ${(sourceImg.width/sourceImg.height).toFixed(3)}`;
+    loadIntoCropper(sourceImg);
+    updateCropThumb();
+    updateFinalSize();
+  } catch (e) {
+    if (els.fileInfo) els.fileInfo.textContent = 'Image failed to load. Try a smaller JPEG/PNG.';
+    alert('Could not load image. Try a JPEG/PNG under ~8MB.');
+    console.error(e);
+  }
 });
 
 // Auto toggles mutual exclusion
