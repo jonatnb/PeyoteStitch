@@ -86,6 +86,17 @@ async function loadFileImage(file){
 let lastGrid = null;
 let delicaFull = [];
 
+// Immediate fallback palette so previews always have color
+window.delicaFull = window.delicaFull || [
+  {"code":"DB-0001","name":"Opaque White","hex":"#FFFFFF"},
+  {"code":"DB-0002","name":"Opaque Black","hex":"#000000"},
+  {"code":"DB-0724","name":"Opaque Yellow","hex":"#F2C100"},
+  {"code":"DB-0792","name":"Opaque Cobalt Blue","hex":"#204B9B"},
+  {"code":"DB-0206","name":"Matte Opaque Green","hex":"#5DBB74"},
+  {"code":"DB-0209","name":"Matte Opaque Brown","hex":"#6D4C41"}
+];
+
+
 // Robust palette load (tries multiple paths, sets window.delicaFull)
 async function loadDelicaPalette(){
   const paths = ["palettes/delica_full.json", "delica_full.json"];
@@ -159,7 +170,18 @@ function drawBeadSim(){
   tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
   const data = tctx.getImageData(0,0,targetW,targetH).data;
   // map each pixel to nearest delica color (ΔE in Lab)
-  const beads = (window.delicaFull || []).map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  let beadsBase = Array.isArray(window.delicaFull) ? window.delicaFull : [];
+  if (!beadsBase || beadsBase.length===0){
+    beadsBase = [
+      {"code":"DB-0001","name":"Opaque White","hex":"#FFFFFF"},
+      {"code":"DB-0002","name":"Opaque Black","hex":"#000000"},
+      {"code":"DB-0724","name":"Opaque Yellow","hex":"#F2C100"},
+      {"code":"DB-0792","name":"Opaque Cobalt Blue","hex":"#204B9B"},
+      {"code":"DB-0206","name":"Matte Opaque Green","hex":"#5DBB74"},
+      {"code":"DB-0209","name":"Matte Opaque Brown","hex":"#6D4C41"}
+    ];
+  }
+  const beads = beadsBase.map(b => ({...b, lab: cachedHexToLab(b.hex)}));
   function nearestHex(r,g,b){
     const lab = rgbToLab(r,g,b);
     let best=null, bestD=1e9;
@@ -232,7 +254,18 @@ function drawBeadSim(){
   tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
   const data = tctx.getImageData(0,0,targetW,targetH).data;
   // map each pixel to nearest delica color (ΔE in Lab)
-  const beads = (window.delicaFull || []).map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  let beadsBase = Array.isArray(window.delicaFull) ? window.delicaFull : [];
+  if (!beadsBase || beadsBase.length===0){
+    beadsBase = [
+      {"code":"DB-0001","name":"Opaque White","hex":"#FFFFFF"},
+      {"code":"DB-0002","name":"Opaque Black","hex":"#000000"},
+      {"code":"DB-0724","name":"Opaque Yellow","hex":"#F2C100"},
+      {"code":"DB-0792","name":"Opaque Cobalt Blue","hex":"#204B9B"},
+      {"code":"DB-0206","name":"Matte Opaque Green","hex":"#5DBB74"},
+      {"code":"DB-0209","name":"Matte Opaque Brown","hex":"#6D4C41"}
+    ];
+  }
+  const beads = beadsBase.map(b => ({...b, lab: cachedHexToLab(b.hex)}));
   function nearestHex(r,g,b){
     const lab = rgbToLab(r,g,b);
     let best=null, bestD=1e9;
@@ -296,7 +329,18 @@ function drawBeadSim(){
   tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
   const data = tctx.getImageData(0,0,targetW,targetH).data;
   // map each pixel to nearest delica color (ΔE in Lab)
-  const beads = (window.delicaFull || []).map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  let beadsBase = Array.isArray(window.delicaFull) ? window.delicaFull : [];
+  if (!beadsBase || beadsBase.length===0){
+    beadsBase = [
+      {"code":"DB-0001","name":"Opaque White","hex":"#FFFFFF"},
+      {"code":"DB-0002","name":"Opaque Black","hex":"#000000"},
+      {"code":"DB-0724","name":"Opaque Yellow","hex":"#F2C100"},
+      {"code":"DB-0792","name":"Opaque Cobalt Blue","hex":"#204B9B"},
+      {"code":"DB-0206","name":"Matte Opaque Green","hex":"#5DBB74"},
+      {"code":"DB-0209","name":"Matte Opaque Brown","hex":"#6D4C41"}
+    ];
+  }
+  const beads = beadsBase.map(b => ({...b, lab: cachedHexToLab(b.hex)}));
   function nearestHex(r,g,b){
     const lab = rgbToLab(r,g,b);
     let best=null, bestD=1e9;
@@ -361,7 +405,18 @@ function drawBeadSim(){
   tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
   const data = tctx.getImageData(0,0,targetW,targetH).data;
   // map each pixel to nearest delica color (ΔE in Lab)
-  const beads = (window.delicaFull || []).map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  let beadsBase = Array.isArray(window.delicaFull) ? window.delicaFull : [];
+  if (!beadsBase || beadsBase.length===0){
+    beadsBase = [
+      {"code":"DB-0001","name":"Opaque White","hex":"#FFFFFF"},
+      {"code":"DB-0002","name":"Opaque Black","hex":"#000000"},
+      {"code":"DB-0724","name":"Opaque Yellow","hex":"#F2C100"},
+      {"code":"DB-0792","name":"Opaque Cobalt Blue","hex":"#204B9B"},
+      {"code":"DB-0206","name":"Matte Opaque Green","hex":"#5DBB74"},
+      {"code":"DB-0209","name":"Matte Opaque Brown","hex":"#6D4C41"}
+    ];
+  }
+  const beads = beadsBase.map(b => ({...b, lab: cachedHexToLab(b.hex)}));
   function nearestHex(r,g,b){
     const lab = rgbToLab(r,g,b);
     let best=null, bestD=1e9;
@@ -513,7 +568,18 @@ function drawBeadSim(){
   tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
   const data = tctx.getImageData(0,0,targetW,targetH).data;
   // map each pixel to nearest delica color (ΔE in Lab)
-  const beads = (window.delicaFull || []).map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  let beadsBase = Array.isArray(window.delicaFull) ? window.delicaFull : [];
+  if (!beadsBase || beadsBase.length===0){
+    beadsBase = [
+      {"code":"DB-0001","name":"Opaque White","hex":"#FFFFFF"},
+      {"code":"DB-0002","name":"Opaque Black","hex":"#000000"},
+      {"code":"DB-0724","name":"Opaque Yellow","hex":"#F2C100"},
+      {"code":"DB-0792","name":"Opaque Cobalt Blue","hex":"#204B9B"},
+      {"code":"DB-0206","name":"Matte Opaque Green","hex":"#5DBB74"},
+      {"code":"DB-0209","name":"Matte Opaque Brown","hex":"#6D4C41"}
+    ];
+  }
+  const beads = beadsBase.map(b => ({...b, lab: cachedHexToLab(b.hex)}));
   function nearestHex(r,g,b){
     const lab = rgbToLab(r,g,b);
     let best=null, bestD=1e9;
@@ -774,7 +840,8 @@ function hitHandle(mx, my){
   if (Math.abs(mx - (crop.x+crop.w)) <= tol && my>=crop.y && my<=crop.y+crop.h) return 'e';
   return null;
 }
-els.cropCanvas.addEventListener('pointerdown', (e)=>{ e.preventDefault(); startDrag(e); });
+els.cropCanvas.addEventListener('pointerdown', (e)=>{ e.preventDefault(); els.cropCanvas.setPointerCapture(e.pointerId); startDrag(e); });
+els.cropCanvas.addEventListener('pointermove', (e)=>{ const rect = els.cropCanvas.getBoundingClientRect(); updateLoupeFromPoint(e.clientX - rect.left, e.clientY - rect.top); });
 function startDrag(e){
   const rect = els.cropCanvas.getBoundingClientRect();
   const mx = (e.clientX - rect.left);
@@ -826,7 +893,7 @@ els.cropCanvas.addEventListener('touchmove', (e)=>{
   e.preventDefault();
 }, {passive:false});
 
-function endDrag(){
+function endDrag(e){ try{ if (e && e.pointerId) els.cropCanvas.releasePointerCapture(e.pointerId); }catch(_){}
   window.removeEventListener('mousemove', onDrag);
   window.removeEventListener('mouseup', endDrag);
   window.removeEventListener('touchmove', onDragTouch);
@@ -1125,7 +1192,18 @@ function drawBeadSim(){
   tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
   const data = tctx.getImageData(0,0,targetW,targetH).data;
   // map each pixel to nearest delica color (ΔE in Lab)
-  const beads = (window.delicaFull || []).map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  let beadsBase = Array.isArray(window.delicaFull) ? window.delicaFull : [];
+  if (!beadsBase || beadsBase.length===0){
+    beadsBase = [
+      {"code":"DB-0001","name":"Opaque White","hex":"#FFFFFF"},
+      {"code":"DB-0002","name":"Opaque Black","hex":"#000000"},
+      {"code":"DB-0724","name":"Opaque Yellow","hex":"#F2C100"},
+      {"code":"DB-0792","name":"Opaque Cobalt Blue","hex":"#204B9B"},
+      {"code":"DB-0206","name":"Matte Opaque Green","hex":"#5DBB74"},
+      {"code":"DB-0209","name":"Matte Opaque Brown","hex":"#6D4C41"}
+    ];
+  }
+  const beads = beadsBase.map(b => ({...b, lab: cachedHexToLab(b.hex)}));
   function nearestHex(r,g,b){
     const lab = rgbToLab(r,g,b);
     let best=null, bestD=1e9;
@@ -1189,7 +1267,18 @@ function drawBeadSim(){
   tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
   const data = tctx.getImageData(0,0,targetW,targetH).data;
   // map each pixel to nearest delica color (ΔE in Lab)
-  const beads = (window.delicaFull || []).map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  let beadsBase = Array.isArray(window.delicaFull) ? window.delicaFull : [];
+  if (!beadsBase || beadsBase.length===0){
+    beadsBase = [
+      {"code":"DB-0001","name":"Opaque White","hex":"#FFFFFF"},
+      {"code":"DB-0002","name":"Opaque Black","hex":"#000000"},
+      {"code":"DB-0724","name":"Opaque Yellow","hex":"#F2C100"},
+      {"code":"DB-0792","name":"Opaque Cobalt Blue","hex":"#204B9B"},
+      {"code":"DB-0206","name":"Matte Opaque Green","hex":"#5DBB74"},
+      {"code":"DB-0209","name":"Matte Opaque Brown","hex":"#6D4C41"}
+    ];
+  }
+  const beads = beadsBase.map(b => ({...b, lab: cachedHexToLab(b.hex)}));
   function nearestHex(r,g,b){
     const lab = rgbToLab(r,g,b);
     let best=null, bestD=1e9;
