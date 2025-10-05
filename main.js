@@ -53,13 +53,22 @@ fetch("palettes/delica_full.json").then(r=>r.json()).then(js=>{ delicaFull = js;
 els.file.addEventListener("change", async (e) => {
   const f = e.target.files[0];
   if (!f) return;
-  const url = URL.createObjectURL(f);
-  sourceImg = await loadImage(url);
-  if (els.origPreview){ els.origPreview.src = url; }
-  if (els.fileInfo){ els.fileInfo.textContent = `${sourceImg.width}×${sourceImg.height} px • AR ${(sourceImg.width/sourceImg.height).toFixed(3)}`; }
-  loadIntoCropper(sourceImg);
-  updateCropThumb();
-  updateFinalSize();
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    const dataURL = ev.target.result;
+    try {
+      sourceImg = await loadImage(dataURL);
+      if (els.origPreview){ els.origPreview.src = dataURL; }
+      if (els.fileInfo){ els.fileInfo.textContent = `${sourceImg.width}×${sourceImg.height} px • AR ${(sourceImg.width/sourceImg.height).toFixed(3)}`; }
+      loadIntoCropper(sourceImg);
+      updateCropThumb();
+      updateFinalSize();
+    } catch (e){
+      alert('Could not load image. Try a JPEG/PNG under ~8MB.');
+      console.error(e);
+    }
+  };
+  reader.readAsDataURL(f);
 });
 
 // Auto toggles mutual exclusion
