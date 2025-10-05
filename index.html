@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Peyote Pattern Maker — Delica FULL (Locked)</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Peyote Pattern Maker</h1>
+    <p>Photo → peyote grid → <strong>Delica FULL</strong> ΔE matching → export. Fixed bead: Delica 11/0.</p>
+  </header>
+
+  <section id="controls">
+    <div class="control">
+      <label>Image</label>
+      <input type="file" id="file" accept="image/*" />
+    </div>
+
+    <div class="control">
+      <label>Bead width</label>
+      <input type="number" id="beadWidth" min="8" max="400" value="80" />
+    </div>
+
+    <div class="control">
+      <label>Bead height (0=auto)</label>
+      <input type="number" id="beadHeight" min="0" max="400" value="0" />
+    </div>
+
+    <div class="control">
+      <label># Colors</label>
+      <input type="number" id="kColors" min="2" max="32" value="12" />
+    </div>
+
+    <div class="control">
+      <label>Cell px</label>
+      <input type="number" id="cellPx" min="6" max="30" value="14" />
+    </div>
+
+    <div class="control">
+      <label><input type="checkbox" id="showGrid" checked /> Grid</label>
+      <label><input type="checkbox" id="brickOffset" checked /> Peyote offset</label>
+    </div>
+
+    <div class="control">
+      <strong>Palette:</strong> <em>Delica FULL (locked)</em>
+    </div>
+
+    <div class="control">
+      <strong>Bead size:</strong> Delica 11/0 (fixed) — ~1.6 × 1.3 mm
+    </div>
+    <div class="control">
+      <label>Shrinkage</label>
+      <input type="range" id="shrinkPct" min="0" max="15" value="0" />
+      <span id="shrinkLabel" class="small">0%</span>
+    </div>
+    <div class="control">
+      <div id="finalSize" class="small">Final size: —</div>
+    </div>
+
+    <div class="control">
+      <button id="btnGenerate">Generate</button>
+      <button id="btnDownloadPNG" disabled>Download PNG</button>
+      <button id="btnDownloadJSON" disabled>Legend JSON</button>
+      <button id="btnDownloadCSV" disabled>Legend CSV</button>
+    </div>
+  </section>
+
+  <main>
+    <div id="canvasWrap">
+      <canvas id="preview" width="1200" height="800"></canvas>
+    </div>
+    <aside id="legend"></aside>
+  </main>
+
+  <footer>
+    <p>Full palette file: <code>palettes/delica_full.json</code> — replace it anytime with your master list.</p>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
