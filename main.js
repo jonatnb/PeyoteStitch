@@ -100,9 +100,10 @@ let viewScale = 1;
 let crop = { x:0, y:0, w:0, h:0 };
 let dragMode = null; // 'move' or 'nw','ne','sw','se'
 let dragOX = 0, dragOY = 0;
+let loupePos = null; // {x,y} in image coords relative to original image
 
 // Load palette
-fetch("palettes/delica_full.json").then(r=>r.json()).then(js=>{ delicaFull = js; });
+fetch("palettes/delica_full.json").then(r=>r.json()).then(p=>{ delicaFull = p; window.delicaFull = p; try { drawBeadSim(); } catch(e){} });
 
 // File handling
 els.file.addEventListener("change", async (e) => {
@@ -602,6 +603,20 @@ function computeBeadSize(){
 }
 
 // ---- Cropper ----
+
+function canvasToImage(mx, my){
+  const offX = els.cropCanvas._offX||0, offY = els.cropCanvas._offY||0;
+  const ix = Math.max(0, Math.min(Math.round((mx - offX)/viewScale), cropImg ? cropImg.width : 0));
+  const iy = Math.max(0, Math.min(Math.round((my - offY)/viewScale), cropImg ? cropImg.height : 0));
+  return {ix, iy};
+}
+function updateLoupeFromPoint(mx, my){
+  if (!cropImg) return;
+  const p = canvasToImage(mx, my);
+  loupePos = { x: p.ix, y: p.iy };
+  updateCropThumb(); // triggers loupe redraw
+}
+
 function loadIntoCropper(img){
   cropImg = img;
   const maxW = els.cropCanvas.width, maxH = els.cropCanvas.height;
@@ -694,15 +709,14 @@ function updateCropThumb(){
   loupeCtx.clearRect(0,0,lW,lH);
   loupeCtx.fillStyle = '#f8fafc'; loupeCtx.fillRect(0,0,lW,lH);
   const zoom = 3; // 3x zoom
-  const ldw = lW, ldh = lH;
-  loupeCtx.imageSmoothingEnabled = false; // keep crisp
-  // center crop region sample to loupe
-  const cx = sx + sw/2, cy = sy + sh/2;
-  const srcW = Math.max(1, Math.round(ldw / zoom));
-  const srcH = Math.max(1, Math.round(ldh / zoom));
-  const sxx = Math.max(0, Math.min(Math.round(cx - srcW/2), cropImg.width - srcW));
-  const syy = Math.max(0, Math.min(Math.round(cy - srcH/2), cropImg.height - srcH));
-  loupeCtx.drawImage(cropImg, sxx,syy,srcW,srcH, 0,0, ldw,ldh);
+  loupeCtx.imageSmoothingEnabled = false; // crisp
+  const centerX = loupePos ? loupePos.x : (sx + sw/2);
+  const centerY = loupePos ? loupePos.y : (sy + sh/2);
+  const srcW = Math.max(1, Math.round(lW / zoom));
+  const srcH = Math.max(1, Math.round(lH / zoom));
+  const sxx = Math.max(0, Math.min(Math.round(centerX - srcW/2), cropImg.width - srcW));
+  const syy = Math.max(0, Math.min(Math.round(centerY - srcH/2), cropImg.height - srcH));
+  loupeCtx.drawImage(cropImg, sxx,syy,srcW,srcH, 0,0, lW,lH);
   // --- Bead Sim (quick) ---
   drawBeadSim();
 }
@@ -762,6 +776,20 @@ function updateDrag(cx, cy){
   }
   drawCropper();
 }
+
+// Loupe reactive to pointer/touch
+els.cropCanvas.addEventListener('mousemove', (e)=>{
+  const rect = els.cropCanvas.getBoundingClientRect();
+  updateLoupeFromPoint(e.clientX - rect.left, e.clientY - rect.top);
+});
+els.cropCanvas.addEventListener('touchmove', (e)=>{
+  if (!e.touches || !e.touches.length) return;
+  const t = e.touches[0];
+  const rect = els.cropCanvas.getBoundingClientRect();
+  updateLoupeFromPoint(t.clientX - rect.left, t.clientY - rect.top);
+  e.preventDefault();
+}, {passive:false});
+
 function endDrag(){
   window.removeEventListener('mousemove', onDrag);
   window.removeEventListener('mouseup', endDrag);
