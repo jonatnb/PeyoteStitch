@@ -1,13 +1,16 @@
-# Peyote Pattern Maker — Delica FULL (v3, Locked)
+# Peyote Pattern Maker — Delica FULL (v3.4, Locked)
 
-**New in v3**
-- **Palette-fit (Low-Color Optimized)** mode: selects K actual Delica codes (best coverage) and maps every bead directly to those. Great at **10–12 colors**.
-- Still includes **Quantize→Map** and **Direct-to-Palette** modes.
-- Auto width/height; shrinkage; finished-size readout; PNG/JSON/CSV exports.
+**New in v3.4**
+- **Reset Crop** button.
+- **Lock crop to bead aspect**: your crop rectangle stays in the same ratio as bead Width:Height (so the final pattern shape matches the crop).
 
-## Usage
-1. Open the page, choose an image.
-2. Set **# Colors** (10–12 recommended) and keep **Mapping: Palette-fit**.
-3. Generate → export PNG/JSON/CSV.
+**Still included**
+- Palette-fit (Low-Color Optimized) default — great at 10–12 colors.
+- Image preview (original + live crop), draggable crop + corner handles.
+- Auto width/height, Lock aspect (avoid stretch), peyote offset.
+- Finished size readout, PNG/JSON/CSV export.
+- Locked to `palettes/delica_full.json` (replaceable).
 
-**Palette file**: `palettes/delica_full.json` (locked). Replace it anytime with your full official list.
+## Tips
+- Leave **Lock aspect** ON to avoid stretching.
+- For bracelets/strips, enable **Lock crop to bead aspect** so your crop matches the final pattern ratio.

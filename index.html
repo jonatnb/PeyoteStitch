@@ -3,13 +3,22 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Peyote Pattern Maker — Delica FULL (v3)</title>
+  <title>Peyote Pattern Maker — Delica FULL (v3.4)</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+    #previewPane, #cropper { padding:12px 16px; background:#fff; border-bottom:1px solid #e5e7eb }
+    #previewRow{display:flex;gap:16px;flex-wrap:wrap}
+    .prevBox{background:#fff;border:1px solid #e5e7eb;padding:8px;width:280px}
+    .prevTitle{font-weight:600;margin-bottom:6px}
+    #origPreview{max-width:100%;height:auto;border:1px solid #e5e7eb;background:#f8fafc}
+    #cropThumb{border:1px solid #e5e7eb;background:#f8fafc;max-width:100%}
+    #cropCanvas{max-width:100%;border:1px solid #e5e7eb;background:#f8fafc}
+  </style>
 </head>
 <body>
   <header>
     <h1>Peyote Pattern Maker</h1>
-    <p>Photo → peyote grid → <strong>Delica FULL</strong> ΔE mapping • Fixed bead: Delica 11/0.</p>
+    <p>Photo → peyote grid → <strong>Delica FULL</strong> mapping • Fixed bead: Delica 11/0.</p>
   </header>
 
   <section id="controls">
@@ -53,6 +62,10 @@
     </div>
 
     <div class="control">
+      <label><input type="checkbox" id="lockAspect" checked> Lock aspect (avoid stretch)</label>
+    </div>
+
+    <div class="control">
       <strong>Bead size:</strong> Delica 11/0 (fixed) — ~1.6 × 1.3 mm
     </div>
     <div class="control">
@@ -70,6 +83,33 @@
       <button id="btnDownloadJSON" disabled>Legend JSON</button>
       <button id="btnDownloadCSV" disabled>Legend CSV</button>
     </div>
+  </section>
+
+  <section id="previewPane">
+    <h3>Image Preview</h3>
+    <div id="previewRow">
+      <div class="prevBox">
+        <div class="prevTitle">Original</div>
+        <img id="origPreview" alt="original preview" />
+        <div id="fileInfo" class="small"></div>
+      </div>
+      <div class="prevBox">
+        <div class="prevTitle">Crop</div>
+        <canvas id="cropThumb" width="240" height="160"></canvas>
+        <div class="small">Live preview of the selected region</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="cropper">
+    <h3>Crop</h3>
+    <p class="small">Drag the box or its corners to select the part of the photo to convert.</p>
+    <div class="control">
+      <button id="btnResetCrop">Reset Crop</button>
+      <label class="small"><input type="checkbox" id="lockCropAspect"> Lock crop to bead aspect</label>
+      <span id="cropAspectLabel" class="small"></span>
+    </div>
+    <canvas id="cropCanvas" width="600" height="360"></canvas>
   </section>
 
   <main>

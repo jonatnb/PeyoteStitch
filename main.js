@@ -1,4 +1,4 @@
-// Peyote Pattern Maker — v3 (Locked to Delica FULL) with Palette-fit mode
+// Peyote Pattern Maker — v3.4 (Locked to Delica FULL)
 const $ = (sel) => document.querySelector(sel);
 const canvas = $("#preview");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -9,6 +9,7 @@ const els = {
   beadHeight: $("#beadHeight"),
   autoWidth: $("#autoWidth"),
   autoHeight: $("#autoHeight"),
+  lockAspect: $("#lockAspect"),
   kColors: $("#kColors"),
   mapMode: $("#mapMode"),
   cellPx: $("#cellPx"),
@@ -19,6 +20,14 @@ const els = {
   dlJSON: $("#btnDownloadJSON"),
   dlCSV: $("#btnDownloadCSV"),
   legend: $("#legend"),
+  // Preview + crop
+  origPreview: $("#origPreview"),
+  fileInfo: $("#fileInfo"),
+  cropThumb: $("#cropThumb"),
+  cropCanvas: $("#cropCanvas"),
+  btnResetCrop: $("#btnResetCrop"),
+  lockCropAspect: $("#lockCropAspect"),
+  cropAspectLabel: $("#cropAspectLabel"),
 };
 
 let sourceImg = null;
@@ -26,21 +35,41 @@ let lastGrid = null;
 let delicaFull = [];
 const labCache = new Map();
 
+// ---- Preview elements ----
+const cropThumbCtx = els.cropThumb.getContext("2d", { willReadFrequently:true });
+
+// ---- Cropper state ----
+const cropCtx = els.cropCanvas.getContext("2d", { willReadFrequently:true });
+let cropImg = null;
+let viewScale = 1;
+let crop = { x:0, y:0, w:0, h:0 };
+let dragMode = null; // 'move' or 'nw','ne','sw','se'
+let dragOX = 0, dragOY = 0;
+
+// Load palette
 fetch("palettes/delica_full.json").then(r=>r.json()).then(js=>{ delicaFull = js; });
 
+// File handling
 els.file.addEventListener("change", async (e) => {
   const f = e.target.files[0];
   if (!f) return;
-  sourceImg = await loadImage(URL.createObjectURL(f));
+  const url = URL.createObjectURL(f);
+  sourceImg = await loadImage(url);
+  if (els.origPreview){ els.origPreview.src = url; }
+  if (els.fileInfo){ els.fileInfo.textContent = `${sourceImg.width}×${sourceImg.height} px • AR ${(sourceImg.width/sourceImg.height).toFixed(3)}`; }
+  loadIntoCropper(sourceImg);
+  updateCropThumb();
   updateFinalSize();
 });
 
+// Auto toggles mutual exclusion
 if (els.autoWidth && els.autoHeight){
-  els.autoWidth.addEventListener('change', ()=>{ if (els.autoWidth.checked) els.autoHeight.checked=false; updateFinalSize(); });
-  els.autoHeight.addEventListener('change', ()=>{ if (els.autoHeight.checked) els.autoWidth.checked=false; updateFinalSize(); });
+  els.autoWidth.addEventListener('change', ()=>{ if (els.autoWidth.checked) els.autoHeight.checked=false; updateCropAspectLabel(); updateFinalSize(); });
+  els.autoHeight.addEventListener('change', ()=>{ if (els.autoHeight.checked) els.autoWidth.checked=false; updateCropAspectLabel(); updateFinalSize(); });
 }
-[els.beadWidth, els.beadHeight].forEach(el=> el && el.addEventListener('input', updateFinalSize));
+[els.beadWidth, els.beadHeight].forEach(el=> el && el.addEventListener('input', ()=>{ updateFinalSize(); updateCropAspectLabel(); if (els.lockCropAspect && els.lockCropAspect.checked) fitCropToAspect(); }));
 
+// Generate button
 els.generate.addEventListener("click", async () => {
   if (!sourceImg) { alert("Please choose an image first."); return; }
   if (!Array.isArray(delicaFull) || delicaFull.length===0){ alert("Full palette not loaded."); return; }
@@ -52,11 +81,11 @@ els.generate.addEventListener("click", async () => {
   const offset = !!(els.brickOffset && els.brickOffset.checked);
   const mapMode = els.mapMode ? els.mapMode.value : "palette_fit";
 
+  const cropOpt = cropRegion();
   let grid = null;
 
   if (mapMode === "direct_to_palette"){
-    // Downsample then snap each cell directly to nearest Delica (no K-means)
-    grid = rasterToGrid(sourceImg, beadW, beadH, Math.min(k, beadW*beadH));
+    grid = rasterToGrid(sourceImg, beadW, beadH, Math.min(k, beadW*beadH), cropOpt);
     const beads = delicaFull.map(b=> ({...b, lab: cachedHexToLab(b.hex)}));
     const entriesMap = new Map();
     for (let i=0;i<grid.cells.length;i++){
@@ -78,8 +107,7 @@ els.generate.addEventListener("click", async () => {
     }
     finalizeFromSnapped(grid, entriesMap);
   } else if (mapMode === "quantize_then_map") {
-    // Original flow: K-means to K colors, then map those K to nearest Delica
-    grid = rasterToGrid(sourceImg, beadW, beadH, k);
+    grid = rasterToGrid(sourceImg, beadW, beadH, k, cropOpt);
     const beads = delicaFull.map(b=> ({...b, lab: cachedHexToLab(b.hex)}));
     const entries = [];
     const mappedPalette = grid.palette.map(rgb=>{
@@ -103,19 +131,18 @@ els.generate.addEventListener("click", async () => {
     grid.palette = mappedPalette;
     grid.mapping = { brand:"delica_full", entries };
   } else {
-    // v3: PALETTE-FIT — choose k actual Delica colors that best cover the image
-    grid = rasterToGrid(sourceImg, beadW, beadH, Math.min(k, beadW*beadH)); // just to get bead-sized pixels
+    // Palette-fit
+    grid = rasterToGrid(sourceImg, beadW, beadH, Math.min(k, beadW*beadH), cropOpt);
     const { chosen, chosenEntries } = paletteFit(grid, k);
-    // Map each cell to nearest chosen color
     const chosenRGB = chosen.map(c => hexToRgbObj(c.hex));
+    const chosenLabs = chosen.map(c => cachedHexToLab(c.hex));
     for (let i=0;i<grid.cells.length;i++){
       const c = grid.cells[i];
-      const idx = nearestIndexLab(rgbToLab(c.r,c.g,c.b), chosen.map(c=>cachedHexToLab(c.hex)));
+      const idx = nearestIndexLab(rgbToLab(c.r,c.g,c.b), chosenLabs);
       const rr = chosenRGB[idx].r, gg = chosenRGB[idx].g, bb = chosenRGB[idx].b;
       grid.cells[i].r = rr; grid.cells[i].g = gg; grid.cells[i].b = bb;
       grid.cells[i].p = idx;
     }
-    // Build palette/counts
     const counts = new Array(chosen.length).fill(0);
     for (let i=0;i<grid.cells.length;i++) counts[ grid.cells[i].p ]++;
     grid.counts = counts;
@@ -132,127 +159,273 @@ els.generate.addEventListener("click", async () => {
   updateFinalSize();
 });
 
-// ---- Helpers shared across modes ----
-function finalizeFromSnapped(grid, entriesMap){
-  const mapIdx = new Map(); const palette=[]; const counts=[];
-  for (let i=0;i<grid.cells.length;i++){
-    const h = rgbToHex(grid.cells[i].r, grid.cells[i].g, grid.cells[i].b);
-    if (!mapIdx.has(h)){ mapIdx.set(h, palette.length); palette.push(hexToRgbObj(h)); counts.push(0); }
-    const pi = mapIdx.get(h); grid.cells[i].p = pi; counts[pi]++;
-  }
-  grid.palette = palette;
-  grid.counts = counts;
-  const entries = grid.palette.map(p => {
-    const hex = rgbToHex(p.r,p.g,p.b);
-    const info = entriesMap.get(hex) || { match:{code:'',name:'',hex}, deltaE:0 };
-    return { rgb:p, ...info };
-  });
-  grid.mapping = { brand: 'delica_full', entries };
+// Downloads
+els.dlPNG.addEventListener("click", () => {
+  if (!lastGrid) return;
+  const png = canvas.toDataURL("image/png");
+  const a = document.createElement("a");
+  a.href = png; a.download = "peyote_pattern.png"; a.click();
+});
+els.dlJSON.addEventListener("click", () => {
+  if (!lastGrid) return;
+  const data = JSON.stringify(lastGrid, null, 2);
+  const blob = new Blob([data], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "peyote_pattern.json"; a.click();
+  URL.revokeObjectURL(url);
+});
+els.dlCSV.addEventListener("click", () => {
+  if (!lastGrid) return;
+  const rows = legendRows(lastGrid);
+  const header = "index,hex,count,code,name,deltaE\n";
+  const body = rows.map(r => [r.idx+1, r.hex, r.count, r.code||"", csvEscape(r.name||""), r.deltaE??""].join(",")).join("\n");
+  downloadBlob(header+body, "text/csv", "peyote_legend.csv");
+});
+
+function csvEscape(s){ return '"' + (s.replaceAll('"','""')) + '"'; }
+function downloadBlob(text, mime, name){
+  const blob = new Blob([text], {type: mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
 }
 
-function paletteFit(grid, k){
-  // 1) Sample pixels (Lab) for speed
-  const samples = [];
-  for (let i=0;i<grid.cells.length;i+= Math.ceil(grid.cells.length/5000) ){
-    const c = grid.cells[i]; samples.push(rgbToLab(c.r,c.g,c.b));
-  }
-  const samp = samples;
-
-  // 2) Build palette Lab cache
-  const pal = delicaFull.map(b => ({...b, lab: cachedHexToLab(b.hex)}));
-
-  // 3) Anchor detection (white, black, yellow, green, blue) — if present in image, seed them
-  const anchorsHex = anchorListFromGrid(grid);
-  const chosen = [];
-  const chosenIdx = new Set();
-  for (const hx of anchorsHex){
-    const idx = pal.findIndex(b => b.hex.toUpperCase()===hx.toUpperCase());
-    if (idx>=0 && !chosenIdx.has(idx)){
-      chosenIdx.add(idx); chosen.push(pal[idx]);
-      if (chosen.length>=k) break;
-    }
-  }
-
-  // 4) Greedy facility-location: add beads that most reduce total distance
-  function totalCost(list){
-    const labs = list.map(x=>x.lab);
-    const mins = samp.map(s => {
-      let m = 1e9;
-      for (const L of labs){
-        const d = deltaE(s, L);
-        if (d<m) m=d;
-      }
-      return m;
-    });
-    return mins.reduce((a,b)=>a+b,0);
-  }
-  let bestCost = chosen.length? totalCost(chosen): Infinity;
-  while (chosen.length < k){
-    let best=null, bestC=null;
-    for (let i=0;i<pal.length;i++){
-      if (chosenIdx.has(i)) continue;
-      const trial = chosen.concat([pal[i]]);
-      const c = totalCost(trial);
-      if (bestC===null || c<bestC){ best=pal[i]; bestC=c; }
-    }
-    if (!best) break;
-    chosen.push(best); chosenIdx.add(pal.indexOf(best)); bestCost=bestC;
-  }
-
-  // 5) Return chosen plus mapping entries (ΔE from an average of nearest region)
-  const chosenEntries = chosen.map((c)=>({ rgb: hexToRgbObj(c.hex), match:{code:c.code, name:c.name, hex:c.hex}, deltaE:0 }));
-  return { chosen, chosenEntries };
-}
-
-function anchorListFromGrid(grid){
-  // quick HSV presence-based anchors
-  const arr = [];
-  const step = Math.ceil((grid.cells.length)/4000);
-  let cntWhite=0,cntBlack=0,cntYellow=0,cntGreen=0,cntBlue=0, total=0;
-  for (let i=0;i<grid.cells.length;i+=step){
-    const c = grid.cells[i]; total++;
-    const maxv = Math.max(c.r,c.g,c.b), minv = Math.min(c.r,c.g,c.b);
-    if (maxv>230 && minv>200) cntWhite++;
-    if (maxv<30) cntBlack++;
-    // HSV approx
-    const hsv = rgbToHsv(c.r,c.g,c.b);
-    if (hsv.s>0.4 && hsv.h>50 && hsv.h<70) cntYellow++;
-    if (hsv.s>0.35 && hsv.h>80 && hsv.h<160) cntGreen++;
-    if (hsv.s>0.35 && hsv.h>190 && hsv.h<250) cntBlue++;
-  }
-  const has = (x)=> x/total > 0.02; // >2% presence
-  if (has(cntWhite)) arr.push("#FFFFFF");
-  if (has(cntBlack)) arr.push("#000000");
-  if (has(cntYellow)) arr.push("#F2C100");
-  if (has(cntGreen)) arr.push("#2FA53A");
-  if (has(cntBlue)) arr.push("#1C62D1");
-  return arr;
-}
-
-// ---- Rasterization & K-means ----
-function loadImage(url) {
-  return new Promise((res, rej) => { const img = new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=url; });
-}
+// ---- Compute bead size (no stretch by default) ----
 function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
 function computeBeadSize(){
   const autoW = els.autoWidth && els.autoWidth.checked;
   const autoH = els.autoHeight && els.autoHeight.checked;
+  const lockAspect = !els.lockAspect || els.lockAspect.checked;
   let w = parseInt(els.beadWidth.value,10) || 0;
   let h = parseInt(els.beadHeight.value,10) || 0;
   const haveImg = !!sourceImg;
   const ar = haveImg ? (sourceImg.height / sourceImg.width) : 1;
-  if (autoW && autoH){ w=90; h=Math.max(8,Math.round(w*ar)); }
-  else if (autoW){ if (!h||h<8) h=90; w=Math.max(8,Math.round(h/ar)); }
-  else if (autoH){ if (!w||w<8) w=90; h=Math.max(8,Math.round(w*ar)); }
-  else { if (!w) w=90; if (!h) h=Math.max(8,Math.round(w*ar)); }
+
+  if (autoW && autoH){
+    w = 90; h = Math.max(8, Math.round(w * ar));
+  } else if (autoW){
+    if (!h || h<8) h = 90;
+    w = Math.max(8, Math.round(h / ar));
+  } else if (autoH){
+    if (!w || w<8) w = 90;
+    h = Math.max(8, Math.round(w * ar));
+  } else {
+    if (lockAspect){
+      if (w && !h){ h = Math.max(8, Math.round(w * ar)); }
+      else if (h && !w){ w = Math.max(8, Math.round(h / ar)); }
+      else if (w && h){ h = Math.max(8, Math.round(w * ar)); }
+      else { w = 90; h = Math.max(8, Math.round(w * ar)); }
+    } else {
+      if (!w) w = 90;
+      if (!h) h = Math.max(8, Math.round(w * ar));
+    }
+  }
   return { w:clamp(w,8,400), h:clamp(h,8,400) };
 }
-function rasterToGrid(img, beadW, beadH, kColors){
+
+// ---- Cropper ----
+function loadIntoCropper(img){
+  cropImg = img;
+  const maxW = els.cropCanvas.width, maxH = els.cropCanvas.height;
+  const ar = img.width / img.height;
+  let drawW = maxW, drawH = Math.round(maxW / ar);
+  if (drawH > maxH){ drawH = maxH; drawW = Math.round(maxH * ar); }
+  viewScale = drawW / img.width;
+  const offX = Math.floor((maxW - drawW)/2);
+  const offY = Math.floor((maxH - drawH)/2);
+  els.cropCanvas._offX = offX; els.cropCanvas._offY = offY;
+  const cw = Math.floor(drawW*0.7);
+  const ch = Math.floor(drawH*0.7);
+  crop = { x: offX + Math.floor((drawW - cw)/2), y: offY + Math.floor((drawH - ch)/2), w: cw, h: ch };
+  if (els.lockCropAspect && els.lockCropAspect.checked) fitCropToAspect();
+  drawCropper();
+}
+function resetCrop(){
+  if (!cropImg) return;
+  els.lockCropAspect && (els.lockCropAspect.checked = false);
+  loadIntoCropper(cropImg);
+}
+els.btnResetCrop.addEventListener("click", resetCrop);
+els.lockCropAspect.addEventListener("change", ()=>{ fitCropToAspect(); drawCropper(); });
+
+function beadAspect(){
+  const dims = computeBeadSize();
+  const ar = dims.w / dims.h; // bead width : height
+  els.cropAspectLabel.textContent = els.lockCropAspect.checked ? `Aspect locked to ${dims.w}:${dims.h} beads` : "";
+  return ar;
+}
+function updateCropAspectLabel(){ beadAspect(); }
+
+function fitCropToAspect(){
+  if (!cropImg) return;
+  const targetAR = beadAspect(); // width/height
+  const offX = els.cropCanvas._offX||0, offY = els.cropCanvas._offY||0;
+  const maxW = Math.round(cropImg.width * viewScale);
+  const maxH = Math.round(cropImg.height * viewScale);
+  // Start from current center, adjust size to match targetAR without leaving the image box
+  const cx = crop.x + crop.w/2, cy = crop.y + crop.h/2;
+  let w = crop.w, h = Math.max(20, Math.round(w / targetAR));
+  if (h > maxH){ h = maxH; w = Math.round(h * targetAR); }
+  if (w > maxW){ w = maxW; h = Math.round(w / targetAR); }
+  // Clamp to canvas bounds
+  let x = Math.round(cx - w/2), y = Math.round(cy - h/2);
+  x = Math.max(offX, Math.min(offX + maxW - w, x));
+  y = Math.max(offY, Math.min(offY + maxH - h, y));
+  crop = { x, y, w, h };
+  updateCropThumb();
+}
+
+function drawCropper(){
+  if (!cropImg) { cropCtx.clearRect(0,0,els.cropCanvas.width,els.cropCanvas.height); return; }
+  const drawW = Math.round(cropImg.width * viewScale);
+  const drawH = Math.round(cropImg.height * viewScale);
+  const offX = els.cropCanvas._offX||0, offY = els.cropCanvas._offY||0;
+  cropCtx.clearRect(0,0,els.cropCanvas.width,els.cropCanvas.height);
+  cropCtx.imageSmoothingEnabled = true;
+  cropCtx.drawImage(cropImg, offX, offY, drawW, drawH);
+  cropCtx.fillStyle = "rgba(0,0,0,0.35)";
+  cropCtx.fillRect(0,0,els.cropCanvas.width,els.cropCanvas.height);
+  cropCtx.clearRect(crop.x, crop.y, crop.w, crop.h);
+  cropCtx.strokeStyle = "#22c55e";
+  cropCtx.lineWidth = 2;
+  cropCtx.strokeRect(crop.x+1, crop.y+1, crop.w-2, crop.h-2);
+  const handles = handlePoints();
+  cropCtx.fillStyle = "#22c55e";
+  handles.forEach(p => cropCtx.fillRect(p.x-4, p.y-4, 8, 8));
+  updateCropThumb();
+}
+function updateCropThumb(){
+  if (!cropImg) return;
+  const {sx,sy,sw,sh} = cropRegion();
+  cropThumbCtx.clearRect(0,0,els.cropThumb.width,els.cropThumb.height);
+  cropThumbCtx.imageSmoothingEnabled = true;
+  cropThumbCtx.drawImage(cropImg, sx,sy,sw,sh, 0,0, els.cropThumb.width, els.cropThumb.height);
+}
+function handlePoints(){
+  return [
+    {name:'nw', x: crop.x, y: crop.y},
+    {name:'ne', x: crop.x+crop.w, y: crop.y},
+    {name:'sw', x: crop.x, y: crop.y+crop.h},
+    {name:'se', x: crop.x+crop.w, y: crop.y+crop.h},
+  ];
+}
+function hitHandle(mx, my){
+  const h = handlePoints();
+  for (const p of h){
+    if (Math.abs(mx - p.x) <= 8 && Math.abs(my - p.y) <= 8) return p.name;
+  }
+  return null;
+}
+els.cropCanvas.addEventListener('mousedown', startDrag);
+els.cropCanvas.addEventListener('touchstart', (e)=>startDrag(e.touches[0]));
+function startDrag(e){
+  const rect = els.cropCanvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left);
+  const my = (e.clientY - rect.top);
+  const handle = hitHandle(mx, my);
+  if (handle){ dragMode = handle; }
+  else if (mx>crop.x && mx<crop.x+crop.w && my>crop.y && my<crop.y+crop.h){ dragMode='move'; }
+  else { dragMode = null; return; }
+  dragOX = mx; dragOY = my;
+  window.addEventListener('mousemove', onDrag);
+  window.addEventListener('mouseup', endDrag);
+  window.addEventListener('touchmove', onDragTouch, {passive:false});
+  window.addEventListener('touchend', endDrag);
+}
+function onDrag(e){ updateDrag(e.clientX, e.clientY); }
+function onDragTouch(e){ if (e.touches && e.touches.length) updateDrag(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }
+function updateDrag(cx, cy){
+  const rect = els.cropCanvas.getBoundingClientRect();
+  const mx = (cx - rect.left);
+  const my = (cy - rect.top);
+  const dx = mx - dragOX, dy = my - dragOY;
+  dragOX = mx; dragOY = my;
+  if (dragMode === 'move'){
+    crop.x = Math.max(0, Math.min(els.cropCanvas.width - crop.w, crop.x + dx));
+    crop.y = Math.max(0, Math.min(els.cropCanvas.height - crop.h, crop.y + dy));
+  } else if (dragMode){
+    if (dragMode.includes('n')){ crop.y += dy; crop.h -= dy; }
+    if (dragMode.includes('s')){ crop.h += dy; }
+    if (dragMode.includes('w')){ crop.x += dx; crop.w -= dx; }
+    if (dragMode.includes('e')){ crop.w += dx; }
+    // min size & bounds
+    crop.w = Math.max(20, Math.min(crop.w, els.cropCanvas.width - crop.x));
+    crop.h = Math.max(20, Math.min(crop.h, els.cropCanvas.height - crop.y));
+    if (els.lockCropAspect && els.lockCropAspect.checked){
+      fitCropToAspect();
+    }
+  }
+  drawCropper();
+}
+function endDrag(){
+  window.removeEventListener('mousemove', onDrag);
+  window.removeEventListener('mouseup', endDrag);
+  window.removeEventListener('touchmove', onDragTouch);
+  window.removeEventListener('touchend', endDrag);
+}
+function cropRegion(){
+  if (!cropImg) return { sx:0, sy:0, sw:1, sh:1 };
+  const offX = els.cropCanvas._offX||0, offY = els.cropCanvas._offY||0;
+  const sx = Math.max(0, Math.round((crop.x - offX) / viewScale));
+  const sy = Math.max(0, Math.round((crop.y - offY) / viewScale));
+  const sw = Math.max(1, Math.round(crop.w / viewScale));
+  const sh = Math.max(1, Math.round(crop.h / viewScale));
+  return { sx, sy, sw, sh };
+}
+
+// ---- Color + mapping helpers ----
+function rgbToLab(r,g,b){
+  const [R,G,B] = [r,g,b].map(v => {
+    v /= 255;
+    return v <= 0.04045 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4);
+  });
+  const X = (R*0.4124 + G*0.3576 + B*0.1805) / 0.95047;
+  const Y = (R*0.2126 + G*0.7152 + B*0.0722);
+  const Z = (R*0.0193 + G*0.1192 + B*0.9505) / 1.08883;
+  function f(t){ return t > 0.008856 ? Math.cbrt(t) : (7.787*t + 16/116); }
+  const fx = f(X), fy = f(Y), fz = f(Z);
+  const L = 116*fy - 16;
+  const a = 500*(fx - fy);
+  const b2 = 200*(fy - fz);
+  return {L,a,b:b2};
+}
+function deltaE(l1, l2){
+  const dL = l1.L - l2.L;
+  const da = l1.a - l2.a;
+  const db = l1.b - l2.b;
+  return Math.sqrt(dL*dL + da*da + db*db);
+}
+function hexToRgbObj(hex){ return { r:parseInt(hex.slice(1,3),16), g:parseInt(hex.slice(3,5),16), b:parseInt(hex.slice(5,7),16) }; }
+function rgbToHex(r,g,b){ return "#" + [r,g,b].map(v=>v.toString(16).padStart(2,"0")).join(""); }
+function cachedHexToLab(hex){
+  let lab = labCache.get(hex);
+  if (!lab){
+    const c = hexToRgbObj(hex);
+    lab = rgbToLab(c.r, c.g, c.b);
+    labCache.set(hex, lab);
+  }
+  return lab;
+}
+function nearestIndexLab(lab, labs){
+  let best=0, bestD=1e9;
+  for (let i=0;i<labs.length;i++){
+    const d = deltaE(lab, labs[i]);
+    if (d<bestD){ bestD=d; best=i; }
+  }
+  return best;
+}
+
+// Rasterization + K-means
+function loadImage(url) { return new Promise((res, rej) => { const img = new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=url; }); }
+function rasterToGrid(img, beadW, beadH, kColors, cropOpt){
   const tmp = document.createElement("canvas");
   tmp.width = beadW; tmp.height = beadH;
   const tctx = tmp.getContext("2d", { willReadFrequently: true });
   tctx.imageSmoothingEnabled = true;
-  tctx.drawImage(img, 0, 0, beadW, beadH);
+  if (cropOpt){ const {sx,sy,sw,sh} = cropOpt; tctx.drawImage(img, sx,sy,sw,sh, 0,0, beadW,beadH); }
+  else { tctx.drawImage(img, 0, 0, beadW, beadH); }
   const data = tctx.getImageData(0,0,beadW,beadH).data;
   const pixels = [];
   for (let i=0;i<data.length;i+=4){
@@ -303,42 +476,68 @@ function kmeansQuant(pixels, k, iters=8){
   return { palette: centroids, labels };
 }
 
-// ---- Color conversions & ΔE ----
-function rgbToLab(r,g,b){
-  const [R,G,B] = [r,g,b].map(v => {
-    v /= 255;
-    return v <= 0.04045 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4);
-  });
-  const X = (R*0.4124 + G*0.3576 + B*0.1805) / 0.95047;
-  const Y = (R*0.2126 + G*0.7152 + B*0.0722);
-  const Z = (R*0.0193 + G*0.1192 + B*0.9505) / 1.08883;
-  function f(t){ return t > 0.008856 ? Math.cbrt(t) : (7.787*t + 16/116); }
-  const fx = f(X), fy = f(Y), fz = f(Z);
-  const L = 116*fy - 16;
-  const a = 500*(fx - fy);
-  const b2 = 200*(fy - fz);
-  return {L,a,b:b2};
-}
-function deltaE(l1, l2){
-  const dL = l1.L - l2.L;
-  const da = l1.a - l2.a;
-  const db = l1.b - l2.b;
-  return Math.sqrt(dL*dL + da*da + db*db);
-}
-function hexToRgbObj(hex){ return { r:parseInt(hex.slice(1,3),16), g:parseInt(hex.slice(3,5),16), b:parseInt(hex.slice(5,7),16) }; }
-function rgbToHex(r,g,b){ return "#" + [r,g,b].map(v=>v.toString(16).padStart(2,"0")).join(""); }
-function cachedHexToLab(hex){
-  let lab = labCache.get(hex);
-  if (!lab){ lab = rgbToLab(hexToRgbObj(hex).r, hexToRgbObj(hex).g, hexToRgbObj(hex).b); labCache.set(hex, lab); }
-  return lab;
-}
-function nearestIndexLab(lab, labs){
-  let best=0, bestD=1e9;
-  for (let i=0;i<labs.length;i++){
-    const d = deltaE(lab, labs[i]);
-    if (d<bestD){ bestD=d; best=i; }
+// Palette-fit
+function paletteFit(grid, k){
+  const step = Math.ceil(grid.cells.length/5000);
+  const samp = [];
+  for (let i=0;i<grid.cells.length;i+=step){
+    const c = grid.cells[i]; samp.push(rgbToLab(c.r,c.g,c.b));
   }
-  return best;
+  const pal = delicaFull.map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  const anchorsHex = anchorListFromGrid(grid);
+  const chosen = []; const chosenIdx = new Set();
+  for (const hx of anchorsHex){
+    const idx = pal.findIndex(b => b.hex.toUpperCase()===hx.toUpperCase());
+    if (idx>=0 && !chosenIdx.has(idx)){ chosenIdx.add(idx); chosen.push(pal[idx]); if (chosen.length>=k) break; }
+  }
+  function totalCost(list){
+    const labs = list.map(x=>x.lab);
+    let cost = 0;
+    for (let s=0;s<samp.length;s++){
+      let m = 1e9;
+      for (let j=0;j<labs.length;j++){
+        const d = deltaE(samp[s], labs[j]);
+        if (d<m) m=d;
+      }
+      cost += m;
+    }
+    return cost;
+  }
+  while (chosen.length < k){
+    let best=null, bestC=null;
+    for (let i=0;i<pal.length;i++){
+      if (chosenIdx.has(i)) continue;
+      const trial = chosen.concat([pal[i]]);
+      const c = totalCost(trial);
+      if (bestC===null || c<bestC){ best=pal[i]; bestC=c; }
+    }
+    if (!best) break;
+    chosenIdx.add(pal.indexOf(best)); chosen.push(best);
+  }
+  const chosenEntries = chosen.map((c)=>({ rgb: hexToRgbObj(c.hex), match:{code:c.code, name:c.name, hex:c.hex}, deltaE:0 }));
+  return { chosen, chosenEntries };
+}
+function anchorListFromGrid(grid){
+  const arr = [];
+  const step = Math.ceil((grid.cells.length)/4000);
+  let cntWhite=0,cntBlack=0,cntYellow=0,cntGreen=0,cntBlue=0, total=0;
+  for (let i=0;i<grid.cells.length;i+=step){
+    const c = grid.cells[i]; total++;
+    const maxv = Math.max(c.r,c.g,c.b), minv = Math.min(c.r,c.g,c.b);
+    if (maxv>230 && minv>200) cntWhite++;
+    if (maxv<30) cntBlack++;
+    const hsv = rgbToHsv(c.r,c.g,c.b);
+    if (hsv.s>0.4 && hsv.h>50 && hsv.h<70) cntYellow++;
+    if (hsv.s>0.35 && hsv.h>80 && hsv.h<160) cntGreen++;
+    if (hsv.s>0.35 && hsv.h>190 && hsv.h<250) cntBlue++;
+  }
+  const has = (x)=> x/total > 0.02;
+  if (has(cntWhite)) arr.push("#FFFFFF");
+  if (has(cntBlack)) arr.push("#000000");
+  if (has(cntYellow)) arr.push("#F2C100");
+  if (has(cntGreen)) arr.push("#2FA53A");
+  if (has(cntBlue)) arr.push("#1C62D1");
+  return arr;
 }
 function rgbToHsv(r,g,b){
   r/=255; g/=255; b/=255;
@@ -358,7 +557,7 @@ function rgbToHsv(r,g,b){
   return {h, s, v};
 }
 
-// ---- Rendering & Legend ----
+// Rendering & Legend
 function renderGrid(grid, cellPx, peyoteOffset=true, showGrid=true){
   const pad = 20;
   const w = grid.w, h=grid.h;
@@ -426,7 +625,7 @@ function buildLegend(grid){
   });
 }
 
-// Finished size (fixed Delica 11/0 ~1.6×1.3mm)
+// Size readout (fixed Delica 11/0 ~1.6×1.3mm)
 const shrinkPctEl = $("#shrinkPct");
 const shrinkLabelEl = $("#shrinkLabel");
 const finalSizeEl = $("#finalSize");
@@ -440,9 +639,8 @@ function updateFinalSize(){
   if (shrink>0){ widthMM*=(1-shrink); heightMM*=(1-shrink); }
   const widthIN = mmToIn(widthMM);
   const heightIN = mmToIn(heightMM);
-  if (finalSizeEl){
-    finalSizeEl.textContent = `Final size: ${widthMM.toFixed(1)} × ${heightMM.toFixed(1)} mm  (${widthIN.toFixed(2)} × ${heightIN.toFixed(2)} in)`;
-  }
+  if (finalSizeEl){ finalSizeEl.textContent = `Final size: ${widthMM.toFixed(1)} × ${heightMM.toFixed(1)} mm  (${widthIN.toFixed(2)} × ${heightIN.toFixed(2)} in)`; }
+  updateCropAspectLabel();
 }
 shrinkPctEl && shrinkPctEl.addEventListener("input", ()=>{ if (shrinkLabelEl) shrinkLabelEl.textContent = shrinkPctEl.value + "%"; updateFinalSize(); });
 updateFinalSize();
