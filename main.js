@@ -28,6 +28,8 @@ const els = {
   btnResetCrop: $("#btnResetCrop"),
   lockCropAspect: $("#lockCropAspect"),
   cropAspectLabel: $("#cropAspectLabel"),
+  loupe: $("#loupe"),
+  beadSim: $("#beadSim"),
 };
 
 let sourceImg = null;
@@ -83,10 +85,13 @@ async function loadFileImage(file){
 
 let lastGrid = null;
 let delicaFull = [];
+window.delicaFull = delicaFull;
 const labCache = new Map();
 
 // ---- Preview elements ----
 const cropThumbCtx = els.cropThumb.getContext("2d", { willReadFrequently:true });
+const loupeCtx = els.loupe.getContext("2d", { willReadFrequently:true });
+const beadSimCtx = els.beadSim.getContext("2d", { willReadFrequently:true });
 
 // ---- Cropper state ----
 const cropCtx = els.cropCanvas.getContext("2d", { willReadFrequently:true });
@@ -110,7 +115,70 @@ els.file.addEventListener("change", async (e) => {
     if (els.fileInfo) els.fileInfo.textContent = `${sourceImg.width}×${sourceImg.height} px • AR ${(sourceImg.width/sourceImg.height).toFixed(3)}`;
     loadIntoCropper(sourceImg);
     updateCropThumb();
-    updateFinalSize();
+    
+function drawBeadSim(){
+  if (!cropImg || !beadSimCtx) return;
+  const {sx,sy,sw,sh} = cropRegion();
+  const W = els.beadSim.width, H = els.beadSim.height;
+  beadSimCtx.clearRect(0,0,W,H);
+  // target grid ~50x (auto aspect)
+  const targetW = 50;
+  const targetH = Math.max(8, Math.round(targetW * (sh/sw)));
+  // sample to a temp canvas
+  const t = document.createElement('canvas'); t.width = targetW; t.height = targetH;
+  const tctx = t.getContext('2d', { willReadFrequently:true });
+  tctx.imageSmoothingEnabled = true;
+  tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
+  const data = tctx.getImageData(0,0,targetW,targetH).data;
+  // map each pixel to nearest delica color (ΔE in Lab)
+  const beads = (window.delicaFull || []).map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  function nearestHex(r,g,b){
+    const lab = rgbToLab(r,g,b);
+    let best=null, bestD=1e9;
+    for (const bead of beads){
+      const d = deltaE(lab, bead.lab);
+      if (d<bestD){ bestD=d; best=bead; }
+    }
+    return best ? best.hex : '#cccccc';
+  }
+  const cellPx = Math.min(10, Math.max(4, Math.floor(Math.min(W/targetW, H/targetH))));
+  const ox = Math.floor((W - cellPx*targetW)/2);
+  const oy = Math.floor((H - cellPx*targetH)/2);
+  beadSimCtx.fillStyle = '#ffffff';
+  beadSimCtx.fillRect(0,0,W,H);
+  beadSimCtx.imageSmoothingEnabled = false;
+  const r = Math.floor(cellPx*0.25); // corner radius
+  for (let y=0;y<targetH;y++){
+    const rowOffset = 0; // straight grid for preview
+    for (let x=0;x<targetW;x++){
+      const idx = (y*targetW + x)*4;
+      const rr = data[idx], gg = data[idx+1], bb = data[idx+2];
+      const hex = nearestHex(rr,gg,bb);
+      const px = ox + x*cellPx + rowOffset;
+      const py = oy + y*cellPx;
+      // rounded bead
+      beadSimCtx.fillStyle = hex;
+      roundRect(beadSimCtx, px+1, py+1, cellPx-2, cellPx-2, r, true, false);
+      // subtle edge
+      beadSimCtx.strokeStyle = '#00000022';
+      beadSimCtx.strokeRect(px+0.5, py+0.5, cellPx-1, cellPx-1);
+    }
+  }
+}
+function roundRect(ctx, x, y, w, h, r, fill, stroke){
+  r = Math.min(r, Math.floor(Math.min(w,h)/2));
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+updateFinalSize();
   } catch (e) {
     if (els.fileInfo) els.fileInfo.textContent = 'Image failed to load. Try a smaller JPEG/PNG.';
     alert('Could not load image. Try a JPEG/PNG under ~8MB.');
@@ -120,10 +188,199 @@ els.file.addEventListener("change", async (e) => {
 
 // Auto toggles mutual exclusion
 if (els.autoWidth && els.autoHeight){
-  els.autoWidth.addEventListener('change', ()=>{ if (els.autoWidth.checked) els.autoHeight.checked=false; updateCropAspectLabel(); updateFinalSize(); });
-  els.autoHeight.addEventListener('change', ()=>{ if (els.autoHeight.checked) els.autoWidth.checked=false; updateCropAspectLabel(); updateFinalSize(); });
+  els.autoWidth.addEventListener('change', ()=>{ if (els.autoWidth.checked) els.autoHeight.checked=false; updateCropAspectLabel(); 
+function drawBeadSim(){
+  if (!cropImg || !beadSimCtx) return;
+  const {sx,sy,sw,sh} = cropRegion();
+  const W = els.beadSim.width, H = els.beadSim.height;
+  beadSimCtx.clearRect(0,0,W,H);
+  // target grid ~50x (auto aspect)
+  const targetW = 50;
+  const targetH = Math.max(8, Math.round(targetW * (sh/sw)));
+  // sample to a temp canvas
+  const t = document.createElement('canvas'); t.width = targetW; t.height = targetH;
+  const tctx = t.getContext('2d', { willReadFrequently:true });
+  tctx.imageSmoothingEnabled = true;
+  tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
+  const data = tctx.getImageData(0,0,targetW,targetH).data;
+  // map each pixel to nearest delica color (ΔE in Lab)
+  const beads = (window.delicaFull || []).map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  function nearestHex(r,g,b){
+    const lab = rgbToLab(r,g,b);
+    let best=null, bestD=1e9;
+    for (const bead of beads){
+      const d = deltaE(lab, bead.lab);
+      if (d<bestD){ bestD=d; best=bead; }
+    }
+    return best ? best.hex : '#cccccc';
+  }
+  const cellPx = Math.min(10, Math.max(4, Math.floor(Math.min(W/targetW, H/targetH))));
+  const ox = Math.floor((W - cellPx*targetW)/2);
+  const oy = Math.floor((H - cellPx*targetH)/2);
+  beadSimCtx.fillStyle = '#ffffff';
+  beadSimCtx.fillRect(0,0,W,H);
+  beadSimCtx.imageSmoothingEnabled = false;
+  const r = Math.floor(cellPx*0.25); // corner radius
+  for (let y=0;y<targetH;y++){
+    const rowOffset = 0; // straight grid for preview
+    for (let x=0;x<targetW;x++){
+      const idx = (y*targetW + x)*4;
+      const rr = data[idx], gg = data[idx+1], bb = data[idx+2];
+      const hex = nearestHex(rr,gg,bb);
+      const px = ox + x*cellPx + rowOffset;
+      const py = oy + y*cellPx;
+      // rounded bead
+      beadSimCtx.fillStyle = hex;
+      roundRect(beadSimCtx, px+1, py+1, cellPx-2, cellPx-2, r, true, false);
+      // subtle edge
+      beadSimCtx.strokeStyle = '#00000022';
+      beadSimCtx.strokeRect(px+0.5, py+0.5, cellPx-1, cellPx-1);
+    }
+  }
 }
-[els.beadWidth, els.beadHeight].forEach(el=> el && el.addEventListener('input', ()=>{ updateFinalSize(); updateCropAspectLabel(); if (els.lockCropAspect && els.lockCropAspect.checked) fitCropToAspect(); }));
+function roundRect(ctx, x, y, w, h, r, fill, stroke){
+  r = Math.min(r, Math.floor(Math.min(w,h)/2));
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+updateFinalSize(); });
+  els.autoHeight.addEventListener('change', ()=>{ if (els.autoHeight.checked) els.autoWidth.checked=false; updateCropAspectLabel(); 
+function drawBeadSim(){
+  if (!cropImg || !beadSimCtx) return;
+  const {sx,sy,sw,sh} = cropRegion();
+  const W = els.beadSim.width, H = els.beadSim.height;
+  beadSimCtx.clearRect(0,0,W,H);
+  // target grid ~50x (auto aspect)
+  const targetW = 50;
+  const targetH = Math.max(8, Math.round(targetW * (sh/sw)));
+  // sample to a temp canvas
+  const t = document.createElement('canvas'); t.width = targetW; t.height = targetH;
+  const tctx = t.getContext('2d', { willReadFrequently:true });
+  tctx.imageSmoothingEnabled = true;
+  tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
+  const data = tctx.getImageData(0,0,targetW,targetH).data;
+  // map each pixel to nearest delica color (ΔE in Lab)
+  const beads = (window.delicaFull || []).map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  function nearestHex(r,g,b){
+    const lab = rgbToLab(r,g,b);
+    let best=null, bestD=1e9;
+    for (const bead of beads){
+      const d = deltaE(lab, bead.lab);
+      if (d<bestD){ bestD=d; best=bead; }
+    }
+    return best ? best.hex : '#cccccc';
+  }
+  const cellPx = Math.min(10, Math.max(4, Math.floor(Math.min(W/targetW, H/targetH))));
+  const ox = Math.floor((W - cellPx*targetW)/2);
+  const oy = Math.floor((H - cellPx*targetH)/2);
+  beadSimCtx.fillStyle = '#ffffff';
+  beadSimCtx.fillRect(0,0,W,H);
+  beadSimCtx.imageSmoothingEnabled = false;
+  const r = Math.floor(cellPx*0.25); // corner radius
+  for (let y=0;y<targetH;y++){
+    const rowOffset = 0; // straight grid for preview
+    for (let x=0;x<targetW;x++){
+      const idx = (y*targetW + x)*4;
+      const rr = data[idx], gg = data[idx+1], bb = data[idx+2];
+      const hex = nearestHex(rr,gg,bb);
+      const px = ox + x*cellPx + rowOffset;
+      const py = oy + y*cellPx;
+      // rounded bead
+      beadSimCtx.fillStyle = hex;
+      roundRect(beadSimCtx, px+1, py+1, cellPx-2, cellPx-2, r, true, false);
+      // subtle edge
+      beadSimCtx.strokeStyle = '#00000022';
+      beadSimCtx.strokeRect(px+0.5, py+0.5, cellPx-1, cellPx-1);
+    }
+  }
+}
+function roundRect(ctx, x, y, w, h, r, fill, stroke){
+  r = Math.min(r, Math.floor(Math.min(w,h)/2));
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+updateFinalSize(); });
+}
+[els.beadWidth, els.beadHeight].forEach(el=> el && el.addEventListener('input', ()=>{ 
+function drawBeadSim(){
+  if (!cropImg || !beadSimCtx) return;
+  const {sx,sy,sw,sh} = cropRegion();
+  const W = els.beadSim.width, H = els.beadSim.height;
+  beadSimCtx.clearRect(0,0,W,H);
+  // target grid ~50x (auto aspect)
+  const targetW = 50;
+  const targetH = Math.max(8, Math.round(targetW * (sh/sw)));
+  // sample to a temp canvas
+  const t = document.createElement('canvas'); t.width = targetW; t.height = targetH;
+  const tctx = t.getContext('2d', { willReadFrequently:true });
+  tctx.imageSmoothingEnabled = true;
+  tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
+  const data = tctx.getImageData(0,0,targetW,targetH).data;
+  // map each pixel to nearest delica color (ΔE in Lab)
+  const beads = (window.delicaFull || []).map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  function nearestHex(r,g,b){
+    const lab = rgbToLab(r,g,b);
+    let best=null, bestD=1e9;
+    for (const bead of beads){
+      const d = deltaE(lab, bead.lab);
+      if (d<bestD){ bestD=d; best=bead; }
+    }
+    return best ? best.hex : '#cccccc';
+  }
+  const cellPx = Math.min(10, Math.max(4, Math.floor(Math.min(W/targetW, H/targetH))));
+  const ox = Math.floor((W - cellPx*targetW)/2);
+  const oy = Math.floor((H - cellPx*targetH)/2);
+  beadSimCtx.fillStyle = '#ffffff';
+  beadSimCtx.fillRect(0,0,W,H);
+  beadSimCtx.imageSmoothingEnabled = false;
+  const r = Math.floor(cellPx*0.25); // corner radius
+  for (let y=0;y<targetH;y++){
+    const rowOffset = 0; // straight grid for preview
+    for (let x=0;x<targetW;x++){
+      const idx = (y*targetW + x)*4;
+      const rr = data[idx], gg = data[idx+1], bb = data[idx+2];
+      const hex = nearestHex(rr,gg,bb);
+      const px = ox + x*cellPx + rowOffset;
+      const py = oy + y*cellPx;
+      // rounded bead
+      beadSimCtx.fillStyle = hex;
+      roundRect(beadSimCtx, px+1, py+1, cellPx-2, cellPx-2, r, true, false);
+      // subtle edge
+      beadSimCtx.strokeStyle = '#00000022';
+      beadSimCtx.strokeRect(px+0.5, py+0.5, cellPx-1, cellPx-1);
+    }
+  }
+}
+function roundRect(ctx, x, y, w, h, r, fill, stroke){
+  r = Math.min(r, Math.floor(Math.min(w,h)/2));
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+updateFinalSize(); updateCropAspectLabel(); if (els.lockCropAspect && els.lockCropAspect.checked) fitCropToAspect(); }));
 
 // Generate button
 els.generate.addEventListener("click", async () => {
@@ -212,7 +469,70 @@ els.generate.addEventListener("click", async () => {
   els.dlPNG.disabled = false;
   els.dlJSON.disabled = false;
   els.dlCSV.disabled = false;
-  updateFinalSize();
+  
+function drawBeadSim(){
+  if (!cropImg || !beadSimCtx) return;
+  const {sx,sy,sw,sh} = cropRegion();
+  const W = els.beadSim.width, H = els.beadSim.height;
+  beadSimCtx.clearRect(0,0,W,H);
+  // target grid ~50x (auto aspect)
+  const targetW = 50;
+  const targetH = Math.max(8, Math.round(targetW * (sh/sw)));
+  // sample to a temp canvas
+  const t = document.createElement('canvas'); t.width = targetW; t.height = targetH;
+  const tctx = t.getContext('2d', { willReadFrequently:true });
+  tctx.imageSmoothingEnabled = true;
+  tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
+  const data = tctx.getImageData(0,0,targetW,targetH).data;
+  // map each pixel to nearest delica color (ΔE in Lab)
+  const beads = (window.delicaFull || []).map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  function nearestHex(r,g,b){
+    const lab = rgbToLab(r,g,b);
+    let best=null, bestD=1e9;
+    for (const bead of beads){
+      const d = deltaE(lab, bead.lab);
+      if (d<bestD){ bestD=d; best=bead; }
+    }
+    return best ? best.hex : '#cccccc';
+  }
+  const cellPx = Math.min(10, Math.max(4, Math.floor(Math.min(W/targetW, H/targetH))));
+  const ox = Math.floor((W - cellPx*targetW)/2);
+  const oy = Math.floor((H - cellPx*targetH)/2);
+  beadSimCtx.fillStyle = '#ffffff';
+  beadSimCtx.fillRect(0,0,W,H);
+  beadSimCtx.imageSmoothingEnabled = false;
+  const r = Math.floor(cellPx*0.25); // corner radius
+  for (let y=0;y<targetH;y++){
+    const rowOffset = 0; // straight grid for preview
+    for (let x=0;x<targetW;x++){
+      const idx = (y*targetW + x)*4;
+      const rr = data[idx], gg = data[idx+1], bb = data[idx+2];
+      const hex = nearestHex(rr,gg,bb);
+      const px = ox + x*cellPx + rowOffset;
+      const py = oy + y*cellPx;
+      // rounded bead
+      beadSimCtx.fillStyle = hex;
+      roundRect(beadSimCtx, px+1, py+1, cellPx-2, cellPx-2, r, true, false);
+      // subtle edge
+      beadSimCtx.strokeStyle = '#00000022';
+      beadSimCtx.strokeRect(px+0.5, py+0.5, cellPx-1, cellPx-1);
+    }
+  }
+}
+function roundRect(ctx, x, y, w, h, r, fill, stroke){
+  r = Math.min(r, Math.floor(Math.min(w,h)/2));
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+updateFinalSize();
 });
 
 // Downloads
@@ -342,8 +662,10 @@ function drawCropper(){
   cropCtx.imageSmoothingEnabled = true;
   cropCtx.drawImage(cropImg, offX, offY, drawW, drawH);
   cropCtx.fillStyle = "rgba(0,0,0,0.35)";
-  cropCtx.fillRect(0,0,els.cropCanvas.width,els.cropCanvas.height);
-  cropCtx.clearRect(crop.x, crop.y, crop.w, crop.h);
+  cropCtx.beginPath();
+  cropCtx.rect(0,0,els.cropCanvas.width,els.cropCanvas.height);
+  cropCtx.rect(crop.x, crop.y, crop.w, crop.h);
+  cropCtx.fill("evenodd");
   cropCtx.strokeStyle = "#22c55e";
   cropCtx.lineWidth = 2;
   cropCtx.strokeRect(crop.x+1, crop.y+1, crop.w-2, crop.h-2);
@@ -355,6 +677,7 @@ function drawCropper(){
 function updateCropThumb(){
   if (!cropImg || !cropThumbCtx) return;
   const {sx,sy,sw,sh} = cropRegion();
+  // --- Crop preview (contain) ---
   const tw = cropThumb.width, th = cropThumb.height;
   cropThumbCtx.clearRect(0,0,tw,th);
   cropThumbCtx.fillStyle = '#f8fafc';
@@ -366,6 +689,22 @@ function updateCropThumb(){
   const dx = Math.floor((tw - dw)/2);
   const dy = Math.floor((th - dh)/2);
   cropThumbCtx.drawImage(cropImg, sx,sy,sw,sh, dx,dy, dw,dh);
+  // --- Loupe (zoom) ---
+  const lW = els.loupe.width, lH = els.loupe.height;
+  loupeCtx.clearRect(0,0,lW,lH);
+  loupeCtx.fillStyle = '#f8fafc'; loupeCtx.fillRect(0,0,lW,lH);
+  const zoom = 3; // 3x zoom
+  const ldw = lW, ldh = lH;
+  loupeCtx.imageSmoothingEnabled = false; // keep crisp
+  // center crop region sample to loupe
+  const cx = sx + sw/2, cy = sy + sh/2;
+  const srcW = Math.max(1, Math.round(ldw / zoom));
+  const srcH = Math.max(1, Math.round(ldh / zoom));
+  const sxx = Math.max(0, Math.min(Math.round(cx - srcW/2), cropImg.width - srcW));
+  const syy = Math.max(0, Math.min(Math.round(cy - srcH/2), cropImg.height - srcH));
+  loupeCtx.drawImage(cropImg, sxx,syy,srcW,srcH, 0,0, ldw,ldh);
+  // --- Bead Sim (quick) ---
+  drawBeadSim();
 }
 function handlePoints(){
   return [
@@ -706,5 +1045,131 @@ function updateFinalSize(){
   if (finalSizeEl){ finalSizeEl.textContent = `Final size: ${widthMM.toFixed(1)} × ${heightMM.toFixed(1)} mm  (${widthIN.toFixed(2)} × ${heightIN.toFixed(2)} in)`; }
   updateCropAspectLabel();
 }
-shrinkPctEl && shrinkPctEl.addEventListener("input", ()=>{ if (shrinkLabelEl) shrinkLabelEl.textContent = shrinkPctEl.value + "%"; updateFinalSize(); });
+shrinkPctEl && shrinkPctEl.addEventListener("input", ()=>{ if (shrinkLabelEl) shrinkLabelEl.textContent = shrinkPctEl.value + "%"; 
+function drawBeadSim(){
+  if (!cropImg || !beadSimCtx) return;
+  const {sx,sy,sw,sh} = cropRegion();
+  const W = els.beadSim.width, H = els.beadSim.height;
+  beadSimCtx.clearRect(0,0,W,H);
+  // target grid ~50x (auto aspect)
+  const targetW = 50;
+  const targetH = Math.max(8, Math.round(targetW * (sh/sw)));
+  // sample to a temp canvas
+  const t = document.createElement('canvas'); t.width = targetW; t.height = targetH;
+  const tctx = t.getContext('2d', { willReadFrequently:true });
+  tctx.imageSmoothingEnabled = true;
+  tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
+  const data = tctx.getImageData(0,0,targetW,targetH).data;
+  // map each pixel to nearest delica color (ΔE in Lab)
+  const beads = (window.delicaFull || []).map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  function nearestHex(r,g,b){
+    const lab = rgbToLab(r,g,b);
+    let best=null, bestD=1e9;
+    for (const bead of beads){
+      const d = deltaE(lab, bead.lab);
+      if (d<bestD){ bestD=d; best=bead; }
+    }
+    return best ? best.hex : '#cccccc';
+  }
+  const cellPx = Math.min(10, Math.max(4, Math.floor(Math.min(W/targetW, H/targetH))));
+  const ox = Math.floor((W - cellPx*targetW)/2);
+  const oy = Math.floor((H - cellPx*targetH)/2);
+  beadSimCtx.fillStyle = '#ffffff';
+  beadSimCtx.fillRect(0,0,W,H);
+  beadSimCtx.imageSmoothingEnabled = false;
+  const r = Math.floor(cellPx*0.25); // corner radius
+  for (let y=0;y<targetH;y++){
+    const rowOffset = 0; // straight grid for preview
+    for (let x=0;x<targetW;x++){
+      const idx = (y*targetW + x)*4;
+      const rr = data[idx], gg = data[idx+1], bb = data[idx+2];
+      const hex = nearestHex(rr,gg,bb);
+      const px = ox + x*cellPx + rowOffset;
+      const py = oy + y*cellPx;
+      // rounded bead
+      beadSimCtx.fillStyle = hex;
+      roundRect(beadSimCtx, px+1, py+1, cellPx-2, cellPx-2, r, true, false);
+      // subtle edge
+      beadSimCtx.strokeStyle = '#00000022';
+      beadSimCtx.strokeRect(px+0.5, py+0.5, cellPx-1, cellPx-1);
+    }
+  }
+}
+function roundRect(ctx, x, y, w, h, r, fill, stroke){
+  r = Math.min(r, Math.floor(Math.min(w,h)/2));
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+updateFinalSize(); });
+
+function drawBeadSim(){
+  if (!cropImg || !beadSimCtx) return;
+  const {sx,sy,sw,sh} = cropRegion();
+  const W = els.beadSim.width, H = els.beadSim.height;
+  beadSimCtx.clearRect(0,0,W,H);
+  // target grid ~50x (auto aspect)
+  const targetW = 50;
+  const targetH = Math.max(8, Math.round(targetW * (sh/sw)));
+  // sample to a temp canvas
+  const t = document.createElement('canvas'); t.width = targetW; t.height = targetH;
+  const tctx = t.getContext('2d', { willReadFrequently:true });
+  tctx.imageSmoothingEnabled = true;
+  tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
+  const data = tctx.getImageData(0,0,targetW,targetH).data;
+  // map each pixel to nearest delica color (ΔE in Lab)
+  const beads = (window.delicaFull || []).map(b => ({...b, lab: cachedHexToLab(b.hex)}));
+  function nearestHex(r,g,b){
+    const lab = rgbToLab(r,g,b);
+    let best=null, bestD=1e9;
+    for (const bead of beads){
+      const d = deltaE(lab, bead.lab);
+      if (d<bestD){ bestD=d; best=bead; }
+    }
+    return best ? best.hex : '#cccccc';
+  }
+  const cellPx = Math.min(10, Math.max(4, Math.floor(Math.min(W/targetW, H/targetH))));
+  const ox = Math.floor((W - cellPx*targetW)/2);
+  const oy = Math.floor((H - cellPx*targetH)/2);
+  beadSimCtx.fillStyle = '#ffffff';
+  beadSimCtx.fillRect(0,0,W,H);
+  beadSimCtx.imageSmoothingEnabled = false;
+  const r = Math.floor(cellPx*0.25); // corner radius
+  for (let y=0;y<targetH;y++){
+    const rowOffset = 0; // straight grid for preview
+    for (let x=0;x<targetW;x++){
+      const idx = (y*targetW + x)*4;
+      const rr = data[idx], gg = data[idx+1], bb = data[idx+2];
+      const hex = nearestHex(rr,gg,bb);
+      const px = ox + x*cellPx + rowOffset;
+      const py = oy + y*cellPx;
+      // rounded bead
+      beadSimCtx.fillStyle = hex;
+      roundRect(beadSimCtx, px+1, py+1, cellPx-2, cellPx-2, r, true, false);
+      // subtle edge
+      beadSimCtx.strokeStyle = '#00000022';
+      beadSimCtx.strokeRect(px+0.5, py+0.5, cellPx-1, cellPx-1);
+    }
+  }
+}
+function roundRect(ctx, x, y, w, h, r, fill, stroke){
+  r = Math.min(r, Math.floor(Math.min(w,h)/2));
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
 updateFinalSize();
