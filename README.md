@@ -1,12 +1,13 @@
-# Peyote Pattern Maker — Delica FULL (Locked)
+# Peyote Pattern Maker — Delica FULL (v3, Locked)
 
-- **Palette is locked** to `palettes/delica_full.json` (no dropdown, no custom options).
-- Fixed bead style: **Delica 11/0 (~1.6 × 1.3 mm)**.
-- Export PNG / JSON / CSV. Peyote offset toggle. Shrinkage + finished-size readout.
+**New in v3**
+- **Palette-fit (Low-Color Optimized)** mode: selects K actual Delica codes (best coverage) and maps every bead directly to those. Great at **10–12 colors**.
+- Still includes **Quantize→Map** and **Direct-to-Palette** modes.
+- Auto width/height; shrinkage; finished-size readout; PNG/JSON/CSV exports.
 
-## Replace the palette later (optional)
-If you have an official complete list, replace `palettes/delica_full.json` with your file (same schema):
-[
-  {"code":"DB-0001","name":"Opaque White","hex":"#FFFFFF"},
-  {"code":"DB-0002","name":"Opaque Black","hex":"#000000"}
-]
+## Usage
+1. Open the page, choose an image.
+2. Set **# Colors** (10–12 recommended) and keep **Mapping: Palette-fit**.
+3. Generate → export PNG/JSON/CSV.
+
+**Palette file**: `palettes/delica_full.json` (locked). Replace it anytime with your full official list.

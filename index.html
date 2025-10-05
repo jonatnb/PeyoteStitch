@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Peyote Pattern Maker — Delica FULL (Locked)</title>
+  <title>Peyote Pattern Maker — Delica FULL (v3)</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header>
     <h1>Peyote Pattern Maker</h1>
-    <p>Photo → peyote grid → <strong>Delica FULL</strong> ΔE matching → export. Fixed bead: Delica 11/0.</p>
+    <p>Photo → peyote grid → <strong>Delica FULL</strong> ΔE mapping • Fixed bead: Delica 11/0.</p>
   </header>
 
   <section id="controls">
@@ -20,31 +20,36 @@
 
     <div class="control">
       <label>Bead width</label>
-      <input type="number" id="beadWidth" min="8" max="400" value="80" />
+      <input type="number" id="beadWidth" min="0" max="400" value="90" />
+      <label class="small"><input type="checkbox" id="autoWidth"> Auto</label>
     </div>
 
     <div class="control">
-      <label>Bead height (0=auto)</label>
+      <label>Bead height</label>
       <input type="number" id="beadHeight" min="0" max="400" value="0" />
+      <label class="small"><input type="checkbox" id="autoHeight" checked> Auto</label>
     </div>
 
     <div class="control">
       <label># Colors</label>
-      <input type="number" id="kColors" min="2" max="32" value="12" />
+      <input type="number" id="kColors" min="2" max="64" value="12" />
+    </div>
+
+    <div class="control">
+      <label>Mapping mode</label>
+      <select id="mapMode">
+        <option value="palette_fit" selected>Palette-fit (best 10–12 Delica)</option>
+        <option value="quantize_then_map">Quantize → Map to Delica</option>
+        <option value="direct_to_palette">Direct to Delica (no quantize)</option>
+      </select>
+      <span class="small">Palette-fit is tuned for 10–12 colors.</span>
     </div>
 
     <div class="control">
       <label>Cell px</label>
       <input type="number" id="cellPx" min="6" max="30" value="14" />
-    </div>
-
-    <div class="control">
       <label><input type="checkbox" id="showGrid" checked /> Grid</label>
       <label><input type="checkbox" id="brickOffset" checked /> Peyote offset</label>
-    </div>
-
-    <div class="control">
-      <strong>Palette:</strong> <em>Delica FULL (locked)</em>
     </div>
 
     <div class="control">
@@ -75,7 +80,7 @@
   </main>
 
   <footer>
-    <p>Full palette file: <code>palettes/delica_full.json</code> — replace it anytime with your master list.</p>
+    <p>Palette file: <code>palettes/delica_full.json</code> (locked). Replace with your official list anytime.</p>
   </footer>
 
   <script src="main.js"></script>
