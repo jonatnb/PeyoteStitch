@@ -85,6 +85,33 @@ async function loadFileImage(file){
 
 let lastGrid = null;
 let delicaFull = [];
+
+// Robust palette load (tries multiple paths, sets window.delicaFull)
+async function loadDelicaPalette(){
+  const paths = ["palettes/delica_full.json", "delica_full.json"];
+  for (const p of paths){
+    try{
+      const r = await fetch(p, {cache:"no-cache"});
+      if (r.ok){
+        const data = await r.json();
+        delicaFull = data; window.delicaFull = data;
+        try { drawBeadSim(); } catch(e){}
+        return;
+      }
+    }catch(e){}
+  }
+  // Fallback minimal palette so bead view still renders
+  delicaFull = window.delicaFull = [
+    {"code":"DB-0001","name":"Opaque White","hex":"#FFFFFF"},
+    {"code":"DB-0002","name":"Opaque Black","hex":"#000000"},
+    {"code":"DB-0724","name":"Opaque Yellow","hex":"#F2C100"},
+    {"code":"DB-0792","name":"Opaque Cobalt Blue","hex":"#204B9B"},
+    {"code":"DB-0206","name":"Matte Opaque Green","hex":"#5DBB74"},
+    {"code":"DB-0209","name":"Matte Opaque Brown","hex":"#6D4C41"}
+  ];
+  try { drawBeadSim(); } catch(e){}
+}
+
 window.delicaFull = delicaFull;
 const labCache = new Map();
 
@@ -103,7 +130,7 @@ let dragOX = 0, dragOY = 0;
 let loupePos = null; // {x,y} in image coords relative to original image
 
 // Load palette
-fetch("palettes/delica_full.json").then(r=>r.json()).then(p=>{ delicaFull = p; window.delicaFull = p; try { drawBeadSim(); } catch(e){} });
+loadDelicaPalette();
 
 // File handling
 els.file.addEventListener("change", async (e) => {
@@ -631,7 +658,7 @@ function loadIntoCropper(img){
   const ch = Math.floor(drawH*0.7);
   crop = { x: offX + Math.floor((drawW - cw)/2), y: offY + Math.floor((drawH - ch)/2), w: cw, h: ch };
   if (els.lockCropAspect && els.lockCropAspect.checked) fitCropToAspect();
-  drawCropper();
+  drawCropper(); drawBeadSim();
 }
 function resetCrop(){
   if (!cropImg) return;
@@ -639,7 +666,7 @@ function resetCrop(){
   loadIntoCropper(cropImg);
 }
 els.btnResetCrop.addEventListener("click", resetCrop);
-els.lockCropAspect.addEventListener("change", ()=>{ fitCropToAspect(); drawCropper(); });
+els.lockCropAspect.addEventListener("change", ()=>{ fitCropToAspect(); drawCropper(); drawBeadSim(); });
 
 function beadAspect(){
   const dims = computeBeadSize();
@@ -686,7 +713,7 @@ function drawCropper(){
   cropCtx.strokeRect(crop.x+1, crop.y+1, crop.w-2, crop.h-2);
   const handles = handlePoints();
   cropCtx.fillStyle = "#22c55e";
-  handles.forEach(p => cropCtx.fillRect(p.x-4, p.y-4, 8, 8));
+  handles.forEach(p => cropCtx.fillRect(p.x-6, p.y-6, 12, 12));
   updateCropThumb();
 }
 function updateCropThumb(){
@@ -721,22 +748,33 @@ function updateCropThumb(){
   drawBeadSim();
 }
 function handlePoints(){
+  const midX = crop.x + crop.w/2, midY = crop.y + crop.h/2;
   return [
     {name:'nw', x: crop.x, y: crop.y},
     {name:'ne', x: crop.x+crop.w, y: crop.y},
     {name:'sw', x: crop.x, y: crop.y+crop.h},
     {name:'se', x: crop.x+crop.w, y: crop.y+crop.h},
+    {name:'n', x: midX, y: crop.y},
+    {name:'s', x: midX, y: crop.y+crop.h},
+    {name:'w', x: crop.x, y: midY},
+    {name:'e', x: crop.x+crop.w, y: midY},
   ];
 }
 function hitHandle(mx, my){
   const h = handlePoints();
+  const R = 14; // hit radius
   for (const p of h){
-    if (Math.abs(mx - p.x) <= 8 && Math.abs(my - p.y) <= 8) return p.name;
+    if (Math.abs(mx - p.x) <= R && Math.abs(my - p.y) <= R) return p.name;
   }
+  // also allow edge dragging with a tolerance band
+  const tol = 12;
+  if (Math.abs(my - crop.y) <= tol && mx>=crop.x && mx<=crop.x+crop.w) return 'n';
+  if (Math.abs(my - (crop.y+crop.h)) <= tol && mx>=crop.x && mx<=crop.x+crop.w) return 's';
+  if (Math.abs(mx - crop.x) <= tol && my>=crop.y && my<=crop.y+crop.h) return 'w';
+  if (Math.abs(mx - (crop.x+crop.w)) <= tol && my>=crop.y && my<=crop.y+crop.h) return 'e';
   return null;
 }
-els.cropCanvas.addEventListener('mousedown', startDrag);
-els.cropCanvas.addEventListener('touchstart', (e)=>startDrag(e.touches[0]));
+els.cropCanvas.addEventListener('pointerdown', (e)=>{ e.preventDefault(); startDrag(e); });
 function startDrag(e){
   const rect = els.cropCanvas.getBoundingClientRect();
   const mx = (e.clientX - rect.left);
@@ -746,13 +784,11 @@ function startDrag(e){
   else if (mx>crop.x && mx<crop.x+crop.w && my>crop.y && my<crop.y+crop.h){ dragMode='move'; }
   else { dragMode = null; return; }
   dragOX = mx; dragOY = my;
-  window.addEventListener('mousemove', onDrag);
-  window.addEventListener('mouseup', endDrag);
-  window.addEventListener('touchmove', onDragTouch, {passive:false});
-  window.addEventListener('touchend', endDrag);
+  window.addEventListener('pointermove', onDrag);
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
 }
 function onDrag(e){ updateDrag(e.clientX, e.clientY); }
-function onDragTouch(e){ if (e.touches && e.touches.length) updateDrag(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }
 function updateDrag(cx, cy){
   const rect = els.cropCanvas.getBoundingClientRect();
   const mx = (cx - rect.left);
@@ -774,7 +810,7 @@ function updateDrag(cx, cy){
       fitCropToAspect();
     }
   }
-  drawCropper();
+  drawCropper(); drawBeadSim();
 }
 
 // Loupe reactive to pointer/touch
