@@ -353,11 +353,19 @@ function drawCropper(){
   updateCropThumb();
 }
 function updateCropThumb(){
-  if (!cropImg) return;
+  if (!cropImg || !cropThumbCtx) return;
   const {sx,sy,sw,sh} = cropRegion();
-  cropThumbCtx.clearRect(0,0,els.cropThumb.width,els.cropThumb.height);
+  const tw = cropThumb.width, th = cropThumb.height;
+  cropThumbCtx.clearRect(0,0,tw,th);
+  cropThumbCtx.fillStyle = '#f8fafc';
+  cropThumbCtx.fillRect(0,0,tw,th);
   cropThumbCtx.imageSmoothingEnabled = true;
-  cropThumbCtx.drawImage(cropImg, sx,sy,sw,sh, 0,0, els.cropThumb.width, els.cropThumb.height);
+  const scale = Math.min(tw / sw, th / sh);
+  const dw = Math.max(1, Math.round(sw * scale));
+  const dh = Math.max(1, Math.round(sh * scale));
+  const dx = Math.floor((tw - dw)/2);
+  const dy = Math.floor((th - dh)/2);
+  cropThumbCtx.drawImage(cropImg, sx,sy,sw,sh, dx,dy, dw,dh);
 }
 function handlePoints(){
   return [
