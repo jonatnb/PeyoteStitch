@@ -44,11 +44,56 @@ function updateDebugData(){
   ];
   debugEl.textContent = lines.join('\n');
 }
-function setDebugLoader(name){ debugState.loader = name; updateDebugData(); }
-function setDebugFile(f){ if (!f) return; debugState.file = { name: f.name||'—', type: f.type||'—', size: f.size||0 }; updateDebugData(); }
-function setDebugImage(img){ if (!img) return; debugState.image = { w: img.width||0, h: img.height||0, ar: img.width? (img.width/img.height):0 }; updateDebugData(); }
-function markDrew(key, val){ debugState.drew[key] = !!val; updateDebugData(); }
-function setTouch(x,y){ debugState.touch = {x,y}; updateDebugData(); }
+function setDebugLoader(name){ debugState.loader = name; updateDebugData();
+
+// Global error hooks → Status log
+window.addEventListener('error', (e)=>{
+  try { logStatus("JS error: " + (e.message || e.error)); } catch(_){}
+});
+window.addEventListener('unhandledrejection', (e)=>{
+  try { logStatus("Promise rejection: " + (e.reason && e.reason.message ? e.reason.message : e.reason)); } catch(_){}
+});
+ }
+function setDebugFile(f){ if (!f) return; debugState.file = { name: f.name||'—', type: f.type||'—', size: f.size||0 }; updateDebugData();
+
+// Global error hooks → Status log
+window.addEventListener('error', (e)=>{
+  try { logStatus("JS error: " + (e.message || e.error)); } catch(_){}
+});
+window.addEventListener('unhandledrejection', (e)=>{
+  try { logStatus("Promise rejection: " + (e.reason && e.reason.message ? e.reason.message : e.reason)); } catch(_){}
+});
+ }
+function setDebugImage(img){ if (!img) return; debugState.image = { w: img.width||0, h: img.height||0, ar: img.width? (img.width/img.height):0 }; updateDebugData();
+
+// Global error hooks → Status log
+window.addEventListener('error', (e)=>{
+  try { logStatus("JS error: " + (e.message || e.error)); } catch(_){}
+});
+window.addEventListener('unhandledrejection', (e)=>{
+  try { logStatus("Promise rejection: " + (e.reason && e.reason.message ? e.reason.message : e.reason)); } catch(_){}
+});
+ }
+function markDrew(key, val){ debugState.drew[key] = !!val; updateDebugData();
+
+// Global error hooks → Status log
+window.addEventListener('error', (e)=>{
+  try { logStatus("JS error: " + (e.message || e.error)); } catch(_){}
+});
+window.addEventListener('unhandledrejection', (e)=>{
+  try { logStatus("Promise rejection: " + (e.reason && e.reason.message ? e.reason.message : e.reason)); } catch(_){}
+});
+ }
+function setTouch(x,y){ debugState.touch = {x,y}; updateDebugData();
+
+// Global error hooks → Status log
+window.addEventListener('error', (e)=>{
+  try { logStatus("JS error: " + (e.message || e.error)); } catch(_){}
+});
+window.addEventListener('unhandledrejection', (e)=>{
+  try { logStatus("Promise rejection: " + (e.reason && e.reason.message ? e.reason.message : e.reason)); } catch(_){}
+});
+ }
 copyBtn && copyBtn.addEventListener('click', ()=>{
   if (!debugEl) return;
   const txt = debugEl.textContent || '';
@@ -57,9 +102,19 @@ copyBtn && copyBtn.addEventListener('click', ()=>{
   } else {
     const r=document.createRange(); r.selectNodeContents(debugEl);
     const s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    try { document.execCommand && document.execCommand('copy'); copyBtn.textContent='Copied!'; setTimeout(()=>copyBtn.textContent='Copy',1200); } catch(_){ /* no-op */ }
   }
 });
 updateDebugData();
+
+// Global error hooks → Status log
+window.addEventListener('error', (e)=>{
+  try { logStatus("JS error: " + (e.message || e.error)); } catch(_){}
+});
+window.addEventListener('unhandledrejection', (e)=>{
+  try { logStatus("Promise rejection: " + (e.reason && e.reason.message ? e.reason.message : e.reason)); } catch(_){}
+});
+
 
 // Elements
 const els = {
@@ -477,6 +532,19 @@ function loadIntoCropper(img){
   els.cropAspectLabel.textContent = `Aspect locked to ${bw}:${bh} beads`;
   drawCropper();
 }
+
+// Load Test Image (verifies pipeline)
+els.btnLoadTest.addEventListener('click', async ()=>{
+  try{
+    logStatus('Loading test image...');
+    const img = await loadImage('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAGZJREFUeNrs1zENgDAMQ9GJ//+S0Q8iS6y2zQ8xwEwqg1cBGf1mGboD1z4iQe6gqv2QwMDAwMDAwMDwHhU9m7HkqKqKqKqKqPZl8YwMDAwMDAwMDwFhtc2v1HcXz3CwMDAwMDAwMPC6tQ8AAQYAVFQxA7X1mMcAAAAASUVORK5CYII=');
+    sourceImg = img; setDebugImage(img);
+    if (els.origPreview){ els.origPreview.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAGZJREFUeNrs1zENgDAMQ9GJ//+S0Q8iS6y2zQ8xwEwqg1cBGf1mGboD1z4iQe6gqv2QwMDAwMDAwMDwHhU9m7HkqKqKqKqKqPZl8YwMDAwMDAwMDwFhtc2v1HcXz3CwMDAwMDAwMPC6tQ8AAQYAVFQxA7X1mMcAAAAASUVORK5CYII='; markDrew('orig', true); }
+    loadIntoCropper(sourceImg);
+    drawBeadSim();
+    logStatus('Test image loaded.');
+  }catch(err){ logStatus('Test image failed: '+err.message); }
+});
 
 // Generate (placeholder hook for final render)
 els.btnGen.addEventListener('click', ()=>{

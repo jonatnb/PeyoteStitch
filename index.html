@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Peyote Pattern Maker v3.6.0</title>
+  <title>Peyote Pattern Maker v3.6.1</title>
   <style>
     body{margin:0;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;color:#0f172a}
     header, footer{background:#fff;border-bottom:1px solid #e5e7eb}
@@ -34,7 +34,7 @@
 </head>
 <body>
   <header>
-    <h1>Peyote Pattern Maker <span class="badge">v3.6.0</span></h1>
+    <h1>Peyote Pattern Maker <span class="badge">v3.6.1</span></h1>
     <div>
       <label class="small"><input id="crosshairToggle" type="checkbox"> Show touch crosshair</label>
     </div>
@@ -48,7 +48,7 @@
   <main>
     <section id="controls">
       <input id="file" type="file" accept="image/jpeg,image/png,image/webp,image/*;capture=environment">
-      <button id="btnGenerate">Generate</button>
+      <button id="btnGenerate">Generate</button> <button id="btnLoadTest">Load Test Image</button>
       <button id="btnResetCrop">Reset Crop</button>
       <label class="small"><input type="checkbox" id="lockCropAspect" checked> Lock crop to bead aspect</label>
       <span id="cropAspectLabel" class="small"></span>
@@ -56,7 +56,7 @@
       <label class="small">Bead H: <input id="beadH" type="number" value="50" min="10" max="400"></label>
     </section>
 
-    <section id="previewPane">
+    <section id="previewPane" style="display:block">
       <div class="row">
         <div class="col" id="origBox">
           <div class="small">Original</div>
@@ -70,7 +70,7 @@
       </div>
     </section>
 
-    <section id="assist">
+    <section id="assist" style="display:block">
       <h3 style="margin:12px">Assist Previews</h3>
       <div id="assistRow">
         <div class="prevBox">
@@ -86,7 +86,7 @@
       </div>
     </section>
 
-    <section id="cropper" style="padding:12px">
+    <section id="cropper" style="padding:12px; display:block">
       <canvas id="cropCanvas" width="600" height="360"></canvas>
     </section>
   </main>
