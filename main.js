@@ -780,7 +780,7 @@ function drawCropper(){
   cropCtx.strokeRect(crop.x+1, crop.y+1, crop.w-2, crop.h-2);
   const handles = handlePoints();
   cropCtx.fillStyle = "#22c55e";
-  handles.forEach(p => cropCtx.fillRect(p.x-6, p.y-6, 12, 12));
+  handles.forEach(p => { cropCtx.beginPath(); cropCtx.arc(p.x, p.y, 9, 0, Math.PI*2); cropCtx.fill(); cropCtx.strokeStyle = '#15803d'; cropCtx.lineWidth = 1; cropCtx.stroke(); });
   updateCropThumb();
 }
 function updateCropThumb(){
@@ -828,11 +828,30 @@ function handlePoints(){
   ];
 }
 function hitHandle(mx, my){
-  const h = handlePoints();
-  const R = 14; // hit radius
-  for (const p of h){
-    if (Math.abs(mx - p.x) <= R && Math.abs(my - p.y) <= R) return p.name;
+  const rCorner = 22; // generous corner radius for touch
+  const edgeBand = 20; // px distance to count as touching an edge
+  // Corner checks
+  const corners = [
+    {name:'nw', x: crop.x, y: crop.y},
+    {name:'ne', x: crop.x+crop.w, y: crop.y},
+    {name:'sw', x: crop.x, y: crop.y+crop.h},
+    {name:'se', x: crop.x+crop.w, y: crop.y+crop.h},
+  ];
+  for (const c of corners){
+    const dx = mx - c.x, dy = my - c.y;
+    if (dx*dx + dy*dy <= rCorner*rCorner) return c.name;
   }
+  // Edge checks (exclude corners so edges don't override them)
+  if (my >= crop.y+edgeBand && my <= crop.y+crop.h-edgeBand){
+    if (Math.abs(mx - crop.x) <= edgeBand) return 'w';
+    if (Math.abs(mx - (crop.x+crop.w)) <= edgeBand) return 'e';
+  }
+  if (mx >= crop.x+edgeBand && mx <= crop.x+crop.w-edgeBand){
+    if (Math.abs(my - crop.y) <= edgeBand) return 'n';
+    if (Math.abs(my - (crop.y+crop.h)) <= edgeBand) return 's';
+  }
+  return null;
+}
   // also allow edge dragging with a tolerance band
   const tol = 12;
   if (Math.abs(my - crop.y) <= tol && mx>=crop.x && mx<=crop.x+crop.w) return 'n';
@@ -853,8 +872,13 @@ els.cropCanvas.addEventListener('pointerdown', (e)=>{
   }
   e.preventDefault();
   try { els.cropCanvas.setPointerCapture(e.pointerId); } catch(_) {}
-  startDrag(e);
+  // cache the mode so edges don't flicker as finger moves
+  dragMode = handle ? handle : 'move';
+  dragOX = mx; dragOY = my;
   isDragging = true;
+  window.addEventListener('pointermove', onDrag, {passive:true});
+  window.addEventListener('pointerup', endDrag, {passive:true});
+  window.addEventListener('pointercancel', endDrag, {passive:true});
 });
 
 els.cropCanvas.addEventListener('pointermove', (e)=>{ const rect = els.cropCanvas.getBoundingClientRect(); updateLoupeFromPoint(e.clientX - rect.left, e.clientY - rect.top); });
