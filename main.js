@@ -28,11 +28,15 @@ const els = {
   btnResetCrop: $("#btnResetCrop"),
   lockCropAspect: $("#lockCropAspect"),
   cropAspectLabel: $("#cropAspectLabel"),
+  debugTouch: $("#debugTouch"),
   loupe: $("#loupe"),
   beadSim: $("#beadSim"),
 };
 
 let sourceImg = null;
+
+let lastPointer = null;
+
 
 async function loadFileImage(file){
   // Try createImageBitmap for performance if available
@@ -163,7 +167,7 @@ els.file.addEventListener("change", async (e) => {
     sourceImg = img;
     if (els.origPreview) els.origPreview.src = dataURL;
     if (els.fileInfo) els.fileInfo.textContent = `${sourceImg.width}×${sourceImg.height} px • AR ${(sourceImg.width/sourceImg.height).toFixed(3)}`;
-    loadIntoCropper(sourceImg);
+    loadIntoCropper(sourceImg); drawBeadSim();
     updateCropThumb();
     
 function drawBeadSim(){
@@ -791,6 +795,14 @@ function drawCropper(){
   const handles = handlePoints();
   cropCtx.fillStyle = "#22c55e";
   handles.forEach(p => { cropCtx.beginPath(); cropCtx.arc(p.x, p.y, 9, 0, Math.PI*2); cropCtx.fill(); cropCtx.strokeStyle = '#15803d'; cropCtx.lineWidth = 1; cropCtx.stroke(); });
+  if (els.debugTouch && els.debugTouch.checked && lastPointer){
+    cropCtx.save();
+    cropCtx.strokeStyle = '#ef4444'; cropCtx.fillStyle = '#ef4444';
+    cropCtx.beginPath(); cropCtx.arc(lastPointer.mx, lastPointer.my, 4, 0, Math.PI*2); cropCtx.fill();
+    cropCtx.beginPath(); cropCtx.moveTo(lastPointer.mx-8, lastPointer.my); cropCtx.lineTo(lastPointer.mx+8, lastPointer.my);
+    cropCtx.moveTo(lastPointer.mx, lastPointer.my-8); cropCtx.lineTo(lastPointer.mx, lastPointer.my+8);
+    cropCtx.stroke(); cropCtx.restore();
+  }
   updateCropThumb();
 }
 function updateCropThumb(){
@@ -891,7 +903,7 @@ els.cropCanvas.addEventListener('pointerdown', (e)=>{
   window.addEventListener('pointercancel', endDrag, {passive:true});
 });
 
-els.cropCanvas.addEventListener('pointermove', (e)=>{ const p = getCanvasPos(e); updateLoupeFromPoint(p.mx, p.my); });
+els.cropCanvas.addEventListener('pointermove', (e)=>{ const p = getCanvasPos(e); lastPointer = p; updateLoupeFromPoint(p.mx, p.my); drawCropper(); });
 function startDrag(e){
   const rect = els.cropCanvas.getBoundingClientRect();
   const mx = (e.clientX - rect.left);
