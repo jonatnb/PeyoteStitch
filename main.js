@@ -141,6 +141,16 @@ let dragOX = 0, dragOY = 0;
 let isDragging = false;
 let loupePos = null; // {x,y} in image coords relative to original image
 
+function getCanvasPos(e){
+  const rect = els.cropCanvas.getBoundingClientRect();
+  const scaleX = els.cropCanvas.width / rect.width;
+  const scaleY = els.cropCanvas.height / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+  return {mx, my};
+}
+
+
 // Load palette
 loadDelicaPalette();
 
@@ -881,7 +891,7 @@ els.cropCanvas.addEventListener('pointerdown', (e)=>{
   window.addEventListener('pointercancel', endDrag, {passive:true});
 });
 
-els.cropCanvas.addEventListener('pointermove', (e)=>{ const rect = els.cropCanvas.getBoundingClientRect(); updateLoupeFromPoint(e.clientX - rect.left, e.clientY - rect.top); });
+els.cropCanvas.addEventListener('pointermove', (e)=>{ const p = getCanvasPos(e); updateLoupeFromPoint(p.mx, p.my); });
 function startDrag(e){
   const rect = els.cropCanvas.getBoundingClientRect();
   const mx = (e.clientX - rect.left);
@@ -895,11 +905,8 @@ function startDrag(e){
   window.addEventListener('pointerup', endDrag, {passive:true});
   window.addEventListener('pointercancel', endDrag, {passive:true});
 }
-function onDrag(e){ if (!isDragging) return; updateDrag(e.clientX, e.clientY); }
-function updateDrag(cx, cy){
-  const rect = els.cropCanvas.getBoundingClientRect();
-  const mx = (cx - rect.left);
-  const my = (cy - rect.top);
+function onDrag(e){ if (!isDragging) return; const p = getCanvasPos(e); updateDrag(p.mx, p.my); }
+function updateDrag(mx, my){
   const dx = mx - dragOX, dy = my - dragOY;
   dragOX = mx; dragOY = my;
   if (dragMode === 'move'){
