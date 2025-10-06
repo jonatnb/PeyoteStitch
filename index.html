@@ -28,7 +28,7 @@
 </head>
 <body>
   <header>
-    <h1>Peyote Pattern Maker <span style='font-size:12px; font-weight:600; padding:2px 6px; border:1px solid #e5e7eb; border-radius:6px; background:#f3f4f6; color:#111; vertical-align:middle;'>v3.5.7</span></h1>
+    <h1>Peyote Pattern Maker <span style='font-size:12px; font-weight:600; padding:2px 6px; border:1px solid #e5e7eb; border-radius:6px; background:#f3f4f6; color:#111; vertical-align:middle;'>v3.5.8</span></h1>
     <p>Photo → peyote grid → <strong>Delica FULL</strong> mapping • Fixed bead: Delica 11/0.</p>
   </header>
 
@@ -151,6 +151,16 @@
     <p>Palette file: <code>palettes/delica_full.json</code> (locked). Replace with your official list anytime.</p>
   </footer>
 
-  <script src="main.js"></script>
+  <script id="inlinePalette">
+window.delicaFull = window.delicaFull || [
+  {"code":"DB-0001","name":"Opaque White","hex":"#FFFFFF"},
+  {"code":"DB-0002","name":"Opaque Black","hex":"#000000"},
+  {"code":"DB-0724","name":"Opaque Yellow","hex":"#F2C100"},
+  {"code":"DB-0792","name":"Opaque Cobalt Blue","hex":"#204B9B"},
+  {"code":"DB-0206","name":"Matte Opaque Green","hex":"#5DBB74"},
+  {"code":"DB-0209","name":"Matte Opaque Brown","hex":"#6D4C41"}
+];
+</script>
+<script src="main.js"></script>
 </body>
 </html>

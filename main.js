@@ -156,31 +156,26 @@ function getCanvasPos(e){
 
 
 // Load palette
-loadDelicaPalette();
+try { loadDelicaPalette(); } catch(e) { /* no-op, inline fallback exists */ }
 
 // File handling
 els.file.addEventListener("change", async (e) => {
-  const f = e.target.files[0];
+  const f = e.target.files && e.target.files[0];
   if (!f) return;
   try {
-    const { img, dataURL } = await loadFileImage(f);
+    const {img, url} = await robustLoadFile(f);
     sourceImg = img;
-    if (els.origPreview) els.origPreview.src = dataURL;
+    if (els.origPreview) els.origPreview.src = url;
     if (els.fileInfo) els.fileInfo.textContent = `${sourceImg.width}×${sourceImg.height} px • AR ${(sourceImg.width/sourceImg.height).toFixed(3)}`;
-    loadIntoCropper(sourceImg); drawBeadSim();
+    loadIntoCropper(sourceImg);
     updateCropThumb();
-    
-function drawBeadSim(){
-  if (!cropImg || !beadSimCtx) return;
-  const {sx,sy,sw,sh} = cropRegion();
-  const W = els.beadSim.width, H = els.beadSim.height;
-  beadSimCtx.clearRect(0,0,W,H);
-  // target grid ~50x (auto aspect)
-  const targetW = 50;
-  const targetH = Math.max(8, Math.round(targetW * (sh/sw)));
-  // sample to a temp canvas
-  const t = document.createElement('canvas'); t.width = targetW; t.height = targetH;
-  const tctx = t.getContext('2d', { willReadFrequently:true });
+    drawBeadSim();
+    updateFinalSize();
+  } catch (err) {
+    alert("Could not load image. Try a JPEG/PNG under ~10MB.");
+    console.error(err);
+  }
+});
   tctx.imageSmoothingEnabled = true;
   tctx.drawImage(cropImg, sx,sy,sw,sh, 0,0, targetW, targetH);
   const data = tctx.getImageData(0,0,targetW,targetH).data;
@@ -1012,6 +1007,47 @@ function nearestIndexLab(lab, labs){
 
 // Rasterization + K-means
 function loadImage(url) { return new Promise((res, rej) => { const img = new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=url; }); }
+
+async function robustLoadFile(file){
+  // 1) Try createImageBitmap for reliability/perf
+  try {
+    if ('createImageBitmap' in window){
+      const bmp = await createImageBitmap(file);
+      // Downscale huge images to avoid iOS memory issues
+      const maxDim = 2400;
+      let w = bmp.width, h = bmp.height;
+      const scale = Math.min(1, maxDim / Math.max(w,h));
+      const tw = Math.max(1, Math.round(w*scale));
+      const th = Math.max(1, Math.round(h*scale));
+      const can = document.createElement('canvas');
+      can.width = tw; can.height = th;
+      const c = can.getContext('2d', { willReadFrequently:true });
+      c.imageSmoothingEnabled = true;
+      c.drawImage(bmp, 0, 0, tw, th);
+      const dataURL = can.toDataURL('image/jpeg', 0.92);
+      const img = await loadImage(dataURL);
+      return { img, url:dataURL };
+    }
+  } catch(e){ /* continue */ }
+
+  // 2) FileReader → DataURL
+  try {
+    const dataURL = await new Promise((res, rej)=>{
+      const reader = new FileReader();
+      reader.onload = () => res(reader.result);
+      reader.onerror = () => rej(new Error('FileReader failed'));
+      reader.readAsDataURL(file);
+    });
+    const img = await loadImage(dataURL);
+    return { img, url:dataURL };
+  } catch(e){ /* continue */ }
+
+  // 3) Fallback: Blob URL
+  const blobURL = URL.createObjectURL(file);
+  const img = await loadImage(blobURL);
+  return { img, url: blobURL };
+}
+
 function rasterToGrid(img, beadW, beadH, kColors, cropOpt){
   const tmp = document.createElement("canvas");
   tmp.width = beadW; tmp.height = beadH;
